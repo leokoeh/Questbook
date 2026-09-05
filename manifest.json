@@ -1,0 +1,12 @@
+{
+  "name": "Questbook",
+  "short_name": "Questbook",
+  "start_url": "./questbook.html",
+  "display": "standalone",
+  "background_color": "#0f1116",
+  "theme_color": "#0f1116",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-1024.png", "sizes": "1024x1024", "type": "image/png" }
+  ]
+}

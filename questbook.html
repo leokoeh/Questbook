@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Questbook</title>
+
+<!-- iOS "Add to Home Screen" app behavior -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Questbook">
+<meta name="theme-color" content="#0f1116">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1116; --bg-grid:#171a21;
+    --panel:#1c202a; --panel-edge:#2b3040;
+    --parchment:#ece6d6; --dim:#8b8a82;
+    --locked:#3c4049; --locked-text:#5f5d64;
+    --gold:#d4a24e; --gold-glow:rgba(212,162,78,0.4);
+    --done:#4f9e72; --done-dim:rgba(79,158,114,0.16);
+    --danger:#b5544a; --warn:#c9843f;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--parchment);font-family:'Inter',sans-serif;overflow:hidden;}
+  body{
+    background-image:radial-gradient(circle at 1px 1px, var(--bg-grid) 1px, transparent 1px);
+    background-size:26px 26px; background-color:var(--bg);
+  }
+
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:20;
+    padding:calc(12px + env(safe-area-inset-top)) 16px 14px;
+    background:linear-gradient(180deg, rgba(15,17,22,0.98), rgba(15,17,22,0.88));
+    border-bottom:1px solid var(--panel-edge);
+    backdrop-filter:blur(6px);
+  }
+  .header-row{ display:flex; align-items:center; justify-content:space-between; }
+  header h1{ font-family:'Cinzel',serif; font-weight:700; font-size:19px; letter-spacing:0.02em; margin:0; }
+  header .sub{ font-size:11px; color:var(--dim); margin-top:2px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  #storage-badge{ font-size:9.5px; font-weight:700; letter-spacing:0.02em; padding:2px 7px; border-radius:20px; border:1px solid var(--panel-edge); }
+  #storage-badge.bridge{ color:var(--done); border-color:var(--done); }
+  #storage-badge.local{ color:var(--gold); border-color:var(--gold); }
+  #storage-badge.memory{ color:var(--warn); border-color:var(--warn); }
+  .header-btns{ display:flex; gap:8px; }
+  header button{
+    font-family:'Inter',sans-serif; font-weight:600; font-size:13px;
+    background:var(--gold); color:#1a1608; border:none; border-radius:8px;
+    padding:9px 14px; cursor:pointer;
+  }
+  header button:active{ transform:scale(0.96); }
+  #backup-btn{ background:#262a34; color:var(--parchment); font-size:15px; padding:9px 11px; }
+  #progress-track{ margin-top:10px; height:6px; border-radius:4px; background:#262a35; overflow:hidden; }
+  #progress-fill{ height:100%; width:0%; border-radius:4px; background:var(--gold); transition:width .5s ease; }
+
+  #memory-warning{
+    display:none; position:fixed; top:74px; left:0; right:0; z-index:19;
+    background:#2a1f13; border-bottom:1px solid var(--warn); color:#e8c495;
+    font-size:11.5px; padding:8px 16px; text-align:center;
+  }
+  #memory-warning.show{ display:block; }
+
+  #stage-wrap{ position:absolute; top:calc(74px + env(safe-area-inset-top)); left:0; right:0; bottom:0; overflow:auto; -webkit-overflow-scrolling:touch; }
+  #stage-wrap.with-warning{ top:calc(108px + env(safe-area-inset-top)); }
+  #canvas{ transform-origin:0 0; }
+  #stage{ position:relative; }
+
+  svg#lines{ position:absolute; top:0; left:0; pointer-events:none; }
+  .path-line{ fill:none; stroke:var(--locked); stroke-width:2; transition:stroke .3s ease; }
+  .path-line.active{ stroke:var(--gold); }
+  .path-line.done{ stroke:var(--done); }
+  .path-line.flow{ stroke-dasharray:6 5; animation:flow .6s linear 3; }
+  @keyframes flow{ to{ stroke-dashoffset:-33; } }
+
+  .quest{
+    position:absolute; width:168px;
+    border-radius:12px; border:1.5px solid var(--panel-edge);
+    background:var(--panel);
+    padding:24px 12px 11px;
+    cursor:pointer; user-select:none;
+    transition:transform .12s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .quest:active{ transform:scale(0.96); }
+
+  .icon-badge{
+    position:absolute; top:-21px; left:50%; transform:translateX(-50%);
+    width:44px; height:44px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:21px; background:#22262f; border:2px solid var(--locked);
+    box-shadow:0 3px 8px rgba(0,0,0,0.4);
+    transition:border-color .3s ease, box-shadow .3s ease;
+  }
+  .quest.available .icon-badge{ border-color:var(--gold); animation:breathe 2.6s ease-in-out infinite; }
+  @keyframes breathe{
+    0%,100%{ box-shadow:0 3px 8px rgba(0,0,0,0.4), 0 0 0 0 rgba(212,162,78,0.35); }
+    50%{ box-shadow:0 3px 8px rgba(0,0,0,0.4), 0 0 0 7px rgba(212,162,78,0); }
+  }
+  .quest.locked .icon-badge{ border-color:var(--locked); filter:grayscale(0.6) brightness(0.7); }
+  .quest.done .icon-badge{ border-color:var(--done); background:var(--done-dim); }
+
+  @keyframes unlockPulse{
+    0%{ box-shadow:0 0 0 0 var(--gold-glow); }
+    60%{ box-shadow:0 0 0 14px rgba(212,162,78,0); }
+    100%{ box-shadow:0 0 0 0 rgba(212,162,78,0); }
+  }
+  .icon-badge.just-unlocked{ animation:unlockPulse 1s ease-out 2; }
+
+  @keyframes stamp{
+    0%{ transform:translateX(-50%) scale(1); }
+    35%{ transform:translateX(-50%) scale(1.4) rotate(-8deg); }
+    60%{ transform:translateX(-50%) scale(0.92) rotate(4deg); }
+    100%{ transform:translateX(-50%) scale(1) rotate(0deg); }
+  }
+  .icon-badge.stamp{ animation:stamp .5s ease; }
+
+  .quest .title{ font-family:'Cinzel',serif; font-weight:700; font-size:12.5px; line-height:1.25; margin:0 0 4px; text-align:center; }
+  .quest .desc{ font-size:10.5px; line-height:1.32; color:var(--dim); margin:0; text-align:center; }
+  .quest .status{ display:flex; align-items:center; justify-content:center; gap:5px; margin-top:8px; font-size:9.5px; font-weight:700; letter-spacing:0.03em; }
+  .quest .dot{ width:6px; height:6px; border-radius:50%; flex:none; }
+
+  .node-actions{ position:absolute; top:-9px; right:-9px; display:none; gap:4px; }
+  .quest.edit-mode .node-actions{ display:flex; }
+  .node-actions button{ width:22px; height:22px; border-radius:50%; border:none; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; }
+  .node-actions .edit-btn{ background:#3d6f95; }
+  .node-actions .del-btn{ background:var(--danger); }
+
+  .quest.locked{ border-color:#262a33; opacity:0.5; }
+  .quest.locked .title{ color:var(--locked-text); }
+  .quest.locked .status{ color:var(--locked-text); }
+  .quest.locked .dot{ background:var(--locked-text); }
+
+  .quest.available{ border-color:var(--gold); box-shadow:0 0 0 1px var(--gold-glow), 0 0 20px var(--gold-glow); }
+  .quest.available .status{ color:var(--gold); }
+  .quest.available .dot{ background:var(--gold); }
+
+  .quest.done{ border-color:var(--done); background:linear-gradient(180deg, var(--panel), var(--done-dim)); }
+  .quest.done .status{ color:var(--done); }
+  .quest.done .dot{ background:var(--done); }
+  .quest.done .title{ text-decoration:line-through; text-decoration-color:rgba(236,230,214,0.4); }
+
+  #empty-hint{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:var(--dim); font-size:13px; width:240px; }
+  #empty-hint b{ color:var(--gold); font-family:'Cinzel',serif; }
+
+  #particles{ position:fixed; inset:0; pointer-events:none; z-index:40; overflow:hidden; }
+  .particle{ position:absolute; font-size:18px; will-change:transform,opacity; }
+
+  #zoom-controls{ position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); left:16px; z-index:20; display:flex; flex-direction:column; gap:6px; }
+  #zoom-controls button{
+    width:38px; height:38px; border-radius:10px; border:1px solid var(--panel-edge);
+    background:var(--panel); color:var(--parchment); font-size:16px; font-weight:600; cursor:pointer;
+  }
+  #zoom-controls button:active{ transform:scale(0.94); }
+
+  #action-stack{ position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); right:16px; z-index:20; display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+  #action-stack button{
+    width:46px; height:46px; border-radius:50%; border:1px solid var(--panel-edge);
+    background:var(--panel); color:var(--dim); font-size:17px; cursor:pointer;
+  }
+  #edit-toggle.active{ background:var(--danger); color:#fff; border-color:var(--danger); }
+
+  #celebrate{
+    position:fixed; top:0; left:0; right:0; z-index:35;
+    display:flex; justify-content:center; padding-top:90px;
+    pointer-events:none; opacity:0; transition:opacity .5s ease;
+  }
+  #celebrate.show{ opacity:1; }
+  #celebrate .banner{
+    background:linear-gradient(180deg, #24291f, #1c1f26); border:1.5px solid var(--gold);
+    color:var(--gold); font-family:'Cinzel',serif; font-weight:700; font-size:13px;
+    padding:10px 18px; border-radius:20px; box-shadow:0 0 24px var(--gold-glow);
+  }
+
+  #overlay{ position:fixed; inset:0; background:rgba(6,7,10,0.75); z-index:30; display:none; align-items:flex-end; justify-content:center; }
+  #overlay.show{ display:flex; }
+  #sheet{ width:100%; max-width:480px; background:var(--panel); border:1px solid var(--panel-edge); border-radius:16px 16px 0 0; padding:18px 18px 22px; max-height:84vh; overflow-y:auto; }
+  #sheet h2{ font-family:'Cinzel',serif; font-size:16px; margin:0 0 14px; }
+  #sheet label{ display:block; font-size:11px; color:var(--dim); margin:12px 0 5px; font-weight:600; }
+  #sheet input[type=text], #sheet textarea{
+    width:100%; background:#15171d; border:1px solid var(--panel-edge); border-radius:8px;
+    color:var(--parchment); padding:9px 10px; font-family:'Inter',sans-serif; font-size:13px;
+  }
+  #sheet textarea{ min-height:52px; resize:vertical; }
+
+  .emoji-row{ display:flex; align-items:center; gap:8px; }
+  #emoji-input{ width:56px !important; flex:none; text-align:center; font-size:20px !important; padding:6px !important; }
+  #emoji-picker{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  #emoji-picker button{ width:34px; height:34px; font-size:17px; border-radius:8px; border:1px solid var(--panel-edge); background:#15171d; cursor:pointer; }
+  #emoji-picker button.picked{ border-color:var(--gold); background:#2a2313; }
+
+  #prereq-list{ display:flex; flex-direction:column; gap:6px; max-height:150px; overflow-y:auto; margin-top:4px; }
+  .prereq-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; padding:6px 8px; background:#15171d; border-radius:7px; }
+  .prereq-row input{ accent-color:var(--gold); width:16px; height:16px; }
+  #prereq-empty{ font-size:11.5px; color:var(--locked-text); font-style:italic; }
+
+  .sheet-actions{ display:flex; gap:10px; margin-top:18px; }
+  .sheet-actions button{ flex:1; padding:11px; border-radius:9px; border:none; font-weight:700; font-size:13.5px; cursor:pointer; }
+  #cancel-btn{ background:#262a34; color:var(--dim); }
+  #save-btn{ background:var(--gold); color:#1a1608; }
+
+  #save-note{
+    position:fixed; bottom:16px; left:66px; font-size:10px; color:var(--dim);
+    opacity:0; transition:opacity .3s ease; pointer-events:none;
+  }
+  #save-note.show{ opacity:1; }
+
+  /* Backup sheet */
+  #backup-sheet h2{ font-family:'Cinzel',serif; font-size:16px; margin:0 0 8px; }
+  #backup-sheet p{ font-size:12px; color:var(--dim); line-height:1.5; margin:0 0 14px; }
+  #backup-sheet .row{ display:flex; gap:10px; margin-bottom:10px; }
+  #backup-sheet .row button{
+    flex:1; padding:12px; border-radius:9px; border:1.5px solid var(--panel-edge); background:#15171d;
+    color:var(--parchment); font-weight:700; font-size:13px; cursor:pointer; text-align:left;
+  }
+  #backup-sheet .row button span.big{ display:block; font-size:18px; margin-bottom:2px; }
+  #backup-sheet .row button.export-opt{ border-color:var(--gold); }
+  #backup-sheet .row button.import-opt{ border-color:var(--done); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <div>
+      <h1>Questbook</h1>
+      <div class="sub"><span id="progress-sub">loading…</span><span id="storage-badge"></span></div>
+    </div>
+    <div class="header-btns">
+      <button id="backup-btn" title="Backup / Restore">⇅</button>
+      <button id="new-quest-btn">+ New Quest</button>
+    </div>
+  </div>
+  <div id="progress-track"><div id="progress-fill"></div></div>
+</header>
+<div id="memory-warning">⚠️ No persistent storage found here yet — tap the badge above, or use Backup (⇅) as a fallback.</div>
+<div id="celebrate"><div class="banner">🏆 Quest tree complete</div></div>
+
+<div id="stage-wrap">
+  <div id="canvas">
+    <div id="stage">
+      <svg id="lines"></svg>
+      <div id="empty-hint">No quests yet.<br><b>Tap "+ New Quest"</b><br>to start your tree.</div>
+    </div>
+  </div>
+</div>
+
+<div id="zoom-controls">
+  <button id="zoom-in">+</button>
+  <button id="zoom-reset">⤢</button>
+  <button id="zoom-out">–</button>
+</div>
+<div id="action-stack">
+  <button id="edit-toggle" title="Toggle edit mode">✎</button>
+</div>
+<div id="particles"></div>
+<div id="save-note">saved ✓</div>
+
+<div id="overlay">
+  <div id="sheet">
+    <h2 id="sheet-title">New Quest</h2>
+
+    <label>Icon</label>
+    <div class="emoji-row">
+      <input type="text" id="emoji-input" maxlength="4" value="⚔️">
+      <div style="font-size:11px;color:var(--dim);">Type any emoji, or pick below</div>
+    </div>
+    <div id="emoji-picker"></div>
+
+    <label>Title</label>
+    <input type="text" id="q-title" placeholder="e.g. Slay the goblin king">
+    <label>Description</label>
+    <textarea id="q-desc" placeholder="What needs to happen here?"></textarea>
+
+    <label>Prerequisites</label>
+    <div id="prereq-list"></div>
+
+    <div class="sheet-actions">
+      <button id="cancel-btn">Cancel</button>
+      <button id="save-btn">Save Quest</button>
+    </div>
+  </div>
+</div>
+
+<div id="backup-overlay" style="position:fixed;inset:0;background:rgba(6,7,10,0.75);z-index:30;display:none;align-items:flex-end;justify-content:center;">
+  <div id="backup-sheet" style="width:100%;max-width:480px;background:var(--panel);border:1px solid var(--panel-edge);border-radius:16px 16px 0 0;padding:18px 18px 24px;">
+    <h2>Backup &amp; Restore</h2>
+    <p>Your progress lives in this browser's storage, which can reset if this file gets reopened somewhere new. Copy your tree to the clipboard anytime, and paste it back in to bring it back — no file needed.</p>
+    <div class="row">
+      <button class="export-opt" id="copy-btn"><span class="big">📋</span>Copy tree<br><span style="font-weight:400;color:var(--dim);font-size:11px;">Puts your quests on the clipboard</span></button>
+    </div>
+    <div class="row">
+      <button class="import-opt" id="paste-btn"><span class="big">📥</span>Paste tree<br><span style="font-weight:400;color:var(--dim);font-size:11px;">Loads quests from the clipboard</span></button>
+    </div>
+    <textarea id="backup-textarea" placeholder="If clipboard access is blocked, paste your backup here, then tap Load below." style="width:100%;min-height:90px;background:#15171d;border:1px solid var(--panel-edge);border-radius:8px;color:var(--parchment);padding:9px 10px;font-family:monospace;font-size:11px;resize:vertical;margin-bottom:10px;"></textarea>
+    <div class="row">
+      <button id="load-btn" style="border-color:var(--panel-edge);">Load from box above</button>
+    </div>
+    <div class="sheet-actions">
+      <button id="backup-close-btn" style="background:#262a34;color:var(--dim);border:none;border-radius:9px;padding:11px;font-weight:700;cursor:pointer;width:100%;">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const EMOJI_SET = ['⚔️','🛡️','🏹','🗡️','🔥','❄️','💀','👑','🏰','🗺️','💰','📜','🔑','🐉','⭐','✅','📦','🧪','🔮','🛠️','🎯','📚','🧭','⛏️'];
+  const LOCAL_KEY = 'questbook-quests-v1';
+
+  let quests = [];
+  let editMode = false;
+  let editingId = null;
+  let storageMode = 'memory';
+  let zoom = 1;
+  let celebrated = false;
+
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('canvas');
+  const svg = document.getElementById('lines');
+  const emptyHint = document.getElementById('empty-hint');
+  const progressSub = document.getElementById('progress-sub');
+  const progressFill = document.getElementById('progress-fill');
+  const storageBadge = document.getElementById('storage-badge');
+  const memoryWarning = document.getElementById('memory-warning');
+  const stageWrap = document.getElementById('stage-wrap');
+  const overlay = document.getElementById('overlay');
+  const editToggle = document.getElementById('edit-toggle');
+  const particlesLayer = document.getElementById('particles');
+  const saveNote = document.getElementById('save-note');
+  const celebrateEl = document.getElementById('celebrate');
+
+  function uid(){ return 'q' + Math.random().toString(36).slice(2,9); }
+  function vibrate(ms){ try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} }
+
+  function waitForBridge(timeoutMs, interval){
+    timeoutMs = timeoutMs || 2500; interval = interval || 150;
+    return new Promise(resolve=>{
+      const start = Date.now();
+      (function poll(){
+        if(window.storage && typeof window.storage.set === 'function') return resolve(true);
+        if(Date.now() - start >= timeoutMs) return resolve(false);
+        setTimeout(poll, interval);
+      })();
+    });
+  }
+
+  async function detectStorageMode(){
+    const bridgePresent = await waitForBridge();
+    if(bridgePresent){
+      try{
+        await window.storage.set('__probe__', '1', false);
+        const r = await window.storage.get('__probe__', false);
+        if(r && r.value === '1'){ await window.storage.delete('__probe__', false); return 'bridge'; }
+      }catch(e){}
+    }
+    try{
+      localStorage.setItem('__probe__', '1');
+      if(localStorage.getItem('__probe__') === '1'){ localStorage.removeItem('__probe__'); return 'local'; }
+    }catch(e){}
+    return 'memory';
+  }
+
+  function updateStorageBadge(){
+    storageBadge.className = storageMode;
+    storageBadge.textContent = storageMode === 'bridge' ? 'synced'
+      : storageMode === 'local' ? 'saved on this device'
+      : 'not saving · tap to recheck';
+    storageBadge.style.cursor = 'pointer';
+    const showWarn = storageMode === 'memory';
+    memoryWarning.classList.toggle('show', showWarn);
+    stageWrap.classList.toggle('with-warning', showWarn);
+  }
+
+  storageBadge.addEventListener('click', async ()=>{
+    const prevMode = storageMode;
+    storageBadge.textContent = 'checking…';
+    const newMode = await detectStorageMode();
+    storageMode = newMode;
+    if(newMode !== prevMode){
+      if(newMode === 'bridge' || newMode === 'local'){ await saveQuests(); }
+    }
+    updateStorageBadge();
+  });
+
+  async function loadQuests(){
+    storageMode = await detectStorageMode();
+    updateStorageBadge();
+    try{
+      if(storageMode === 'bridge'){
+        const res = await window.storage.get('quests', false);
+        quests = res && res.value ? JSON.parse(res.value) : seedQuests();
+        if(!res){ await saveQuests(); }
+      } else if(storageMode === 'local'){
+        const raw = localStorage.getItem(LOCAL_KEY);
+        quests = raw ? JSON.parse(raw) : seedQuests();
+        if(!raw){ await saveQuests(); }
+      } else {
+        quests = seedQuests();
+      }
+    }catch(e){ quests = seedQuests(); }
+    quests.forEach(q=>{ if(!q.icon) q.icon='⚔️'; });
+    celebrated = quests.length>0 && quests.every(q=>q.done);
+    render();
+  }
+
+  let saveNoteTimer;
+  async function saveQuests(){
+    try{
+      if(storageMode === 'bridge'){ await window.storage.set('quests', JSON.stringify(quests), false); }
+      else if(storageMode === 'local'){ localStorage.setItem(LOCAL_KEY, JSON.stringify(quests)); }
+      else { return; }
+      saveNote.classList.add('show');
+      clearTimeout(saveNoteTimer);
+      saveNoteTimer = setTimeout(()=>saveNote.classList.remove('show'), 1000);
+    }catch(e){}
+  }
+
+  function seedQuests(){
+    const a = uid(), b = uid(), c = uid();
+    return [
+      {id:a, title:'Sharpen the Blade', desc:'No prereqs — start here.', icon:'⚔️', prereqIds:[], done:false},
+      {id:b, title:'Scout the Ridge', desc:'Runs in parallel with the first.', icon:'🗺️', prereqIds:[], done:false},
+      {id:c, title:'Confront the Boss', desc:'Locked until both above are done.', icon:'🐉', prereqIds:[a,b], done:false},
+    ];
+  }
+
+  function tierOf(q, cache){
+    if(cache.has(q.id)) return cache.get(q.id);
+    if(!q.prereqIds.length){ cache.set(q.id,0); return 0; }
+    const t = 1 + Math.max(...q.prereqIds.map(id=>{
+      const p = quests.find(x=>x.id===id);
+      return p ? tierOf(p, cache) : 0;
+    }));
+    cache.set(q.id, t);
+    return t;
+  }
+
+  function isLocked(q){
+    return q.prereqIds.some(id=>{
+      const p = quests.find(x=>x.id===id);
+      return !p || !p.done;
+    });
+  }
+
+  const NODE_W = 168, NODE_H = 100, COL_GAP = 24, ROW_GAP = 104, PAD = 42;
+
+  function layout(){
+    const cache = new Map();
+    const tiers = {};
+    quests.forEach(q=>{ const t = tierOf(q, cache); (tiers[t] = tiers[t] || []).push(q); });
+    const tierKeys = Object.keys(tiers).map(Number).sort((a,b)=>a-b);
+    let maxCols = 1;
+    tierKeys.forEach(t=>{ maxCols = Math.max(maxCols, tiers[t].length); });
+    const stageW = Math.max(window.innerWidth, PAD*2 + maxCols*(NODE_W+COL_GAP));
+    const positions = {};
+    tierKeys.forEach(t=>{
+      const row = tiers[t];
+      const rowW = row.length*(NODE_W+COL_GAP) - COL_GAP;
+      const startX = (stageW - rowW)/2;
+      row.forEach((q,i)=>{ positions[q.id] = { x: startX + i*(NODE_W+COL_GAP), y: PAD + t*(NODE_H+ROW_GAP) }; });
+    });
+    const stageH = PAD*2 + (tierKeys.length ? (Math.max(...tierKeys)+1) : 1) * (NODE_H+ROW_GAP);
+    return {positions, stageW, stageH};
+  }
+
+  function escapeHtml(s){
+    return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function render(justUnlockedIds, stampId){
+    justUnlockedIds = justUnlockedIds || [];
+    stage.querySelectorAll('.quest').forEach(n=>n.remove());
+    emptyHint.style.display = quests.length ? 'none' : 'block';
+
+    const done = quests.filter(q=>q.done).length;
+    const total = quests.length;
+    progressSub.textContent = total ? `${done} / ${total} quests complete` : 'your quest tree, from scratch';
+    progressFill.style.width = total ? Math.round(done/total*100)+'%' : '0%';
+
+    if(!total){ svg.innerHTML=''; stage.style.width='100%'; stage.style.height='100%'; return; }
+
+    const {positions, stageW, stageH} = layout();
+    stage.style.width = stageW + 'px';
+    stage.style.height = stageH + 'px';
+    svg.setAttribute('width', stageW);
+    svg.setAttribute('height', stageH);
+    svg.setAttribute('viewBox', `0 0 ${stageW} ${stageH}`);
+
+    let lines = '';
+    quests.forEach(q=>{
+      const to = positions[q.id];
+      q.prereqIds.forEach(pid=>{
+        const p = quests.find(x=>x.id===pid);
+        if(!p) return;
+        const from = positions[pid];
+        const x1 = from.x + NODE_W/2, y1 = from.y + NODE_H - 14;
+        const x2 = to.x + NODE_W/2, y2 = to.y + 2;
+        const midY = (y1+y2)/2;
+        let cls = q.done ? 'done' : (p.done ? 'active' : '');
+        if(justUnlockedIds.includes(q.id)) cls += ' flow';
+        lines += `<path class="path-line ${cls}" d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}"/>`;
+      });
+    });
+    svg.innerHTML = lines;
+
+    quests.forEach(q=>{
+      const pos = positions[q.id];
+      const locked = isLocked(q);
+      const statusClass = q.done ? 'done' : (locked ? 'locked' : 'available');
+      const el = document.createElement('div');
+      el.className = `quest ${statusClass}` + (editMode ? ' edit-mode' : '');
+      el.style.left = pos.x + 'px';
+      el.style.top = pos.y + 'px';
+      const statusLabel = q.done ? 'COMPLETE' : (locked ? 'LOCKED' : 'AVAILABLE');
+      const badgeExtra = justUnlockedIds.includes(q.id) ? ' just-unlocked' : (stampId===q.id ? ' stamp' : '');
+      el.innerHTML = `
+        <div class="node-actions">
+          <button class="edit-btn">✎</button>
+          <button class="del-btn">×</button>
+        </div>
+        <div class="icon-badge${badgeExtra}">${q.icon}</div>
+        <p class="title">${escapeHtml(q.title)}</p>
+        <p class="desc">${escapeHtml(q.desc||'')}</p>
+        <div class="status"><span class="dot"></span>${statusLabel}</div>
+      `;
+      el.addEventListener('click', (e)=>{
+        if(e.target.closest('.node-actions')) return;
+        if(editMode) return;
+        if(locked) return;
+        completeToggle(q, el);
+      });
+      el.querySelector('.del-btn').addEventListener('click', (e)=>{ e.stopPropagation(); deleteQuest(q.id); });
+      el.querySelector('.edit-btn').addEventListener('click', (e)=>{ e.stopPropagation(); openSheet(q.id); });
+      stage.appendChild(el);
+    });
+  }
+
+  function completeToggle(q, el){
+    const wasDone = q.done;
+    const lockedBefore = new Set(quests.filter(x=>isLocked(x)).map(x=>x.id));
+    q.done = !q.done;
+    saveQuests();
+
+    if(!wasDone && q.done){
+      vibrate(15);
+      burstConfetti(el, ['✨','🎉','⭐']);
+      const lockedAfter = new Set(quests.filter(x=>isLocked(x)).map(x=>x.id));
+      const justUnlocked = [...lockedBefore].filter(id=>!lockedAfter.has(id));
+      render(justUnlocked, q.id);
+      setTimeout(()=>{
+        document.querySelectorAll('.icon-badge.just-unlocked, .icon-badge.stamp').forEach(b=>{
+          b.classList.remove('just-unlocked'); b.classList.remove('stamp');
+        });
+      }, 1100);
+
+      const allDone = quests.length>0 && quests.every(x=>x.done);
+      if(allDone && !celebrated){
+        celebrated = true;
+        setTimeout(()=>{
+          vibrate([20,40,20]);
+          celebrateEl.classList.add('show');
+          burstConfetti({getBoundingClientRect:()=>({left:window.innerWidth/2-4, top:window.innerHeight*0.35, width:8})}, ['🏆','✨','🎉','⭐'], 26);
+          setTimeout(()=>celebrateEl.classList.remove('show'), 2400);
+        }, 350);
+      }
+    } else {
+      celebrated = false;
+      render();
+    }
+  }
+
+  function burstConfetti(nodeEl, bits, count){
+    bits = bits || ['✨','🎉','⭐'];
+    count = count || 12;
+    const rect = nodeEl.getBoundingClientRect();
+    const cx = rect.left + rect.width/2, cy = rect.top + 10;
+    for(let i=0;i<count;i++){
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.textContent = bits[Math.floor(Math.random()*bits.length)];
+      const angle = Math.random()*Math.PI*2;
+      const dist = 36 + Math.random()*80;
+      const dx = Math.cos(angle)*dist, dy = Math.sin(angle)*dist - 30;
+      p.style.left = cx + 'px'; p.style.top = cy + 'px';
+      particlesLayer.appendChild(p);
+      p.animate([
+        { transform:'translate(0,0) scale(0.6)', opacity:1 },
+        { transform:`translate(${dx}px, ${dy}px) scale(1.2)`, opacity:0 }
+      ], { duration: 650 + Math.random()*350, easing:'ease-out' }).onfinish = ()=> p.remove();
+    }
+  }
+
+  function deleteQuest(id){
+    quests = quests.filter(q=>q.id!==id);
+    quests.forEach(q=>{ q.prereqIds = q.prereqIds.filter(p=>p!==id); });
+    saveQuests();
+    render();
+  }
+
+  editToggle.addEventListener('click', ()=>{
+    editMode = !editMode;
+    editToggle.classList.toggle('active', editMode);
+    render();
+  });
+
+  // Zoom controls
+  function applyZoom(){ canvas.style.transform = `scale(${zoom})`; }
+  document.getElementById('zoom-in').addEventListener('click', ()=>{ zoom = Math.min(1.4, zoom + 0.15); applyZoom(); });
+  document.getElementById('zoom-out').addEventListener('click', ()=>{ zoom = Math.max(0.55, zoom - 0.15); applyZoom(); });
+  document.getElementById('zoom-reset').addEventListener('click', ()=>{ zoom = 1; applyZoom(); });
+
+  // ---- Backup: copy / paste via clipboard ----
+  const backupBtn = document.getElementById('backup-btn');
+  const backupOverlay = document.getElementById('backup-overlay');
+  const backupCloseBtn = document.getElementById('backup-close-btn');
+  const copyBtn = document.getElementById('copy-btn');
+  const pasteBtn = document.getElementById('paste-btn');
+  const loadBtn = document.getElementById('load-btn');
+  const backupTextarea = document.getElementById('backup-textarea');
+
+  backupBtn.addEventListener('click', ()=>{ backupTextarea.value=''; backupOverlay.style.display = 'flex'; });
+  backupCloseBtn.addEventListener('click', ()=>{ backupOverlay.style.display = 'none'; });
+  backupOverlay.addEventListener('click', (e)=>{ if(e.target===backupOverlay) backupOverlay.style.display='none'; });
+
+  function flashCopyBtn(label){
+    const original = copyBtn.innerHTML;
+    copyBtn.querySelector('.big').textContent = '✅';
+    copyBtn.lastChild ? null : null;
+    setTimeout(()=>{ copyBtn.innerHTML = original; }, 1400);
+  }
+
+  copyBtn.addEventListener('click', async ()=>{
+    const payload = JSON.stringify({ questbookBackup:true, version:1, quests }, null, 2);
+    backupTextarea.value = payload;
+    try{
+      await navigator.clipboard.writeText(payload);
+      flashCopyBtn();
+    }catch(e){
+      backupTextarea.focus();
+      backupTextarea.select();
+    }
+  });
+
+  pasteBtn.addEventListener('click', async ()=>{
+    try{
+      const text = await navigator.clipboard.readText();
+      backupTextarea.value = text;
+      loadFromText(text);
+    }catch(e){
+      backupTextarea.value = '';
+      backupTextarea.focus();
+      backupTextarea.placeholder = 'Clipboard access was blocked — long-press here and paste manually, then tap Load below.';
+    }
+  });
+
+  loadBtn.addEventListener('click', ()=>{ loadFromText(backupTextarea.value); });
+
+  function loadFromText(text){
+    try{
+      const data = JSON.parse(text);
+      const incoming = Array.isArray(data) ? data : data.quests;
+      if(!Array.isArray(incoming)) throw new Error('bad shape');
+      const valid = incoming.every(q=>q && typeof q.id==='string' && typeof q.title==='string' && Array.isArray(q.prereqIds));
+      if(!valid) throw new Error('bad quest shape');
+      if(quests.length && !confirm(`Replace your current ${quests.length} quest(s) with the ${incoming.length} from this backup?`)){
+        return;
+      }
+      quests = incoming.map(q=>({ id:q.id, title:q.title, desc:q.desc||'', icon:q.icon||'⚔️', prereqIds:q.prereqIds||[], done:!!q.done }));
+      celebrated = quests.length>0 && quests.every(x=>x.done);
+      saveQuests();
+      render();
+      backupOverlay.style.display = 'none';
+    }catch(err){
+      alert("That doesn't look like a valid Questbook backup.");
+    }
+  }
+
+  const newBtn = document.getElementById('new-quest-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  const saveBtn = document.getElementById('save-btn');
+  const sheetTitle = document.getElementById('sheet-title');
+  const titleInput = document.getElementById('q-title');
+  const descInput = document.getElementById('q-desc');
+  const emojiInput = document.getElementById('emoji-input');
+  const emojiPicker = document.getElementById('emoji-picker');
+  const prereqList = document.getElementById('prereq-list');
+
+  EMOJI_SET.forEach(em=>{
+    const b = document.createElement('button');
+    b.type='button'; b.textContent = em;
+    b.addEventListener('click', ()=>{
+      emojiInput.value = em;
+      emojiPicker.querySelectorAll('button').forEach(x=>x.classList.remove('picked'));
+      b.classList.add('picked');
+    });
+    emojiPicker.appendChild(b);
+  });
+
+  function openSheet(editId){
+    editingId = editId || null;
+    const editingQuest = editingId ? quests.find(q=>q.id===editingId) : null;
+
+    sheetTitle.textContent = editingQuest ? 'Edit Quest' : 'New Quest';
+    saveBtn.textContent = editingQuest ? 'Save Changes' : 'Save Quest';
+    titleInput.value = editingQuest ? editingQuest.title : '';
+    descInput.value = editingQuest ? editingQuest.desc : '';
+    emojiInput.value = editingQuest ? editingQuest.icon : '⚔️';
+
+    emojiPicker.querySelectorAll('button').forEach(b=>b.classList.toggle('picked', b.textContent===emojiInput.value));
+
+    prereqList.innerHTML = '';
+    const selectable = quests.filter(q=>q.id!==editingId);
+    if(!selectable.length){
+      prereqList.innerHTML = '<div id="prereq-empty">No other quests yet to depend on.</div>';
+    } else {
+      selectable.forEach(q=>{
+        const row = document.createElement('label');
+        row.className = 'prereq-row';
+        const checked = editingQuest && editingQuest.prereqIds.includes(q.id) ? 'checked' : '';
+        row.innerHTML = `<input type="checkbox" value="${q.id}" ${checked}> ${q.icon} ${escapeHtml(q.title)}`;
+        prereqList.appendChild(row);
+      });
+    }
+    overlay.classList.add('show');
+    setTimeout(()=>titleInput.focus(), 50);
+  }
+  function closeSheet(){ overlay.classList.remove('show'); editingId = null; }
+
+  newBtn.addEventListener('click', ()=>openSheet(null));
+  cancelBtn.addEventListener('click', closeSheet);
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeSheet(); });
+
+  saveBtn.addEventListener('click', ()=>{
+    const title = titleInput.value.trim();
+    if(!title){ titleInput.focus(); return; }
+    const desc = descInput.value.trim();
+    const icon = emojiInput.value.trim() || '⚔️';
+    const prereqIds = Array.from(prereqList.querySelectorAll('input[type=checkbox]:checked')).map(cb=>cb.value);
+
+    if(editingId){
+      const q = quests.find(x=>x.id===editingId);
+      Object.assign(q, {title, desc, icon, prereqIds});
+      celebrated = quests.length>0 && quests.every(x=>x.done);
+    } else {
+      quests.push({id:uid(), title, desc, icon, prereqIds, done:false});
+      celebrated = false;
+    }
+    saveQuests();
+    render();
+    closeSheet();
+  });
+
+  window.addEventListener('resize', ()=>render());
+  loadQuests();
+})();
+</script>
+</body>
+</html>
