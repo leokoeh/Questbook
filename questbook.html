@@ -92,20 +92,24 @@
     box-shadow:0 3px 8px rgba(0,0,0,0.4);
     transition:border-color .3s ease, box-shadow .3s ease;
   }
-  .quest.available .icon-badge{ border-color:var(--gold); animation:breathe 2.6s ease-in-out infinite; }
-  @keyframes breathe{
-    0%,100%{ box-shadow:0 3px 8px rgba(0,0,0,0.4), 0 0 0 0 rgba(212,162,78,0.35); }
-    50%{ box-shadow:0 3px 8px rgba(0,0,0,0.4), 0 0 0 7px rgba(212,162,78,0); }
+  .icon-badge::before, .icon-badge::after{
+    content:''; position:absolute; inset:-6px; border-radius:50%;
+    border:2px solid var(--gold); opacity:0; pointer-events:none;
+  }
+  .quest.available .icon-badge{ border-color:var(--gold); box-shadow:0 3px 8px rgba(0,0,0,0.4), 0 0 8px rgba(212,162,78,0.35); }
+  .quest.available .icon-badge::before{ animation:breatheRing 2.6s ease-in-out infinite; }
+  @keyframes breatheRing{
+    0%,100%{ transform:scale(0.85); opacity:0.5; }
+    50%{ transform:scale(1.2); opacity:0; }
   }
   .quest.locked .icon-badge{ border-color:var(--locked); filter:grayscale(0.6) brightness(0.7); }
-  .quest.done .icon-badge{ border-color:var(--done); background:var(--done-dim); }
+  .quest.done .icon-badge{ border-color:var(--done); background:#182b23; }
 
-  @keyframes unlockPulse{
-    0%{ box-shadow:0 0 0 0 var(--gold-glow); }
-    60%{ box-shadow:0 0 0 14px rgba(212,162,78,0); }
-    100%{ box-shadow:0 0 0 0 rgba(212,162,78,0); }
+  .icon-badge.just-unlocked::after{ animation:unlockRing 1s ease-out 2; }
+  @keyframes unlockRing{
+    0%{ transform:scale(0.8); opacity:0.75; }
+    100%{ transform:scale(1.7); opacity:0; }
   }
-  .icon-badge.just-unlocked{ animation:unlockPulse 1s ease-out 2; }
 
   @keyframes stamp{
     0%{ transform:translateX(-50%) scale(1); }
@@ -398,11 +402,32 @@
 
   const NODE_W = 168, NODE_H = 100, COL_GAP = 24, ROW_GAP = 104, PAD = 42;
 
+  // Orders each tier by the average horizontal position of each quest's prerequisites
+  // (barycenter heuristic) so children line up under their parents instead of
+  // sitting in raw insertion order — fewer crossed lines, a tree that reads top-to-bottom.
   function layout(){
     const cache = new Map();
     const tiers = {};
     quests.forEach(q=>{ const t = tierOf(q, cache); (tiers[t] = tiers[t] || []).push(q); });
     const tierKeys = Object.keys(tiers).map(Number).sort((a,b)=>a-b);
+
+    const orderIndex = {};
+    tierKeys.forEach(t=>{
+      const row = tiers[t];
+      if(t === tierKeys[0]){
+        row.forEach((q,i)=>{ orderIndex[q.id] = i; });
+        return;
+      }
+      const withScore = row.map((q,i)=>{
+        const parentIdx = q.prereqIds.map(id=>orderIndex[id]).filter(v=>v!==undefined);
+        const score = parentIdx.length ? parentIdx.reduce((a,b)=>a+b,0)/parentIdx.length : i;
+        return {q, score, i};
+      });
+      withScore.sort((a,b)=> a.score - b.score || a.i - b.i);
+      tiers[t] = withScore.map(x=>x.q);
+      tiers[t].forEach((q,i)=>{ orderIndex[q.id] = i; });
+    });
+
     let maxCols = 1;
     tierKeys.forEach(t=>{ maxCols = Math.max(maxCols, tiers[t].length); });
     const stageW = Math.max(window.innerWidth, PAD*2 + maxCols*(NODE_W+COL_GAP));
@@ -423,7 +448,6 @@
 
   function render(justUnlockedIds, stampId){
     justUnlockedIds = justUnlockedIds || [];
-    stage.querySelectorAll('.quest').forEach(n=>n.remove());
     emptyHint.style.display = quests.length ? 'none' : 'block';
 
     const done = quests.filter(q=>q.done).length;
@@ -431,7 +455,10 @@
     progressSub.textContent = total ? `${done} / ${total} quests complete` : 'your quest tree, from scratch';
     progressFill.style.width = total ? Math.round(done/total*100)+'%' : '0%';
 
-    if(!total){ svg.innerHTML=''; stage.style.width='100%'; stage.style.height='100%'; return; }
+    if(!total){
+      stage.querySelectorAll('.quest').forEach(n=>n.remove());
+      svg.innerHTML=''; stage.style.width='100%'; stage.style.height='100%'; return;
+    }
 
     const {positions, stageW, stageH} = layout();
     stage.style.width = stageW + 'px';
@@ -457,12 +484,15 @@
     });
     svg.innerHTML = lines;
 
+    stage.querySelectorAll('.quest').forEach(n=>n.remove());
+    const frag = document.createDocumentFragment();
     quests.forEach(q=>{
       const pos = positions[q.id];
       const locked = isLocked(q);
       const statusClass = q.done ? 'done' : (locked ? 'locked' : 'available');
       const el = document.createElement('div');
       el.className = `quest ${statusClass}` + (editMode ? ' edit-mode' : '');
+      el.dataset.id = q.id;
       el.style.left = pos.x + 'px';
       el.style.top = pos.y + 'px';
       const statusLabel = q.done ? 'COMPLETE' : (locked ? 'LOCKED' : 'AVAILABLE');
@@ -477,17 +507,29 @@
         <p class="desc">${escapeHtml(q.desc||'')}</p>
         <div class="status"><span class="dot"></span>${statusLabel}</div>
       `;
-      el.addEventListener('click', (e)=>{
-        if(e.target.closest('.node-actions')) return;
-        if(editMode) return;
-        if(locked) return;
-        completeToggle(q, el);
-      });
-      el.querySelector('.del-btn').addEventListener('click', (e)=>{ e.stopPropagation(); deleteQuest(q.id); });
-      el.querySelector('.edit-btn').addEventListener('click', (e)=>{ e.stopPropagation(); openSheet(q.id); });
-      stage.appendChild(el);
+      frag.appendChild(el);
     });
+    stage.appendChild(frag);
   }
+
+  // Single delegated listener instead of per-node ones — avoids attaching/detaching
+  // 3 listeners per quest on every single render.
+  stage.addEventListener('click', (e)=>{
+    const questEl = e.target.closest('.quest');
+    if(!questEl) return;
+    const q = quests.find(x=>x.id===questEl.dataset.id);
+    if(!q) return;
+    const actionBtn = e.target.closest('.del-btn, .edit-btn');
+    if(actionBtn){
+      e.stopPropagation();
+      if(actionBtn.classList.contains('del-btn')) deleteQuest(q.id);
+      else openSheet(q.id);
+      return;
+    }
+    if(editMode) return;
+    if(isLocked(q)) return;
+    completeToggle(q, questEl);
+  });
 
   function completeToggle(q, el){
     const wasDone = q.done;
@@ -638,7 +680,11 @@
     closeSheet();
   });
 
-  window.addEventListener('resize', ()=>render());
+  let resizeTimer;
+  window.addEventListener('resize', ()=>{
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(()=>render(), 150);
+  });
   loadQuests();
 })();
 </script>
