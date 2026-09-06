@@ -1,496 +1,1064 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Questbook</title>
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0d0d0f">
-    <style>
-        :root {
-            --bg: #0d0d0f;
-            --panel: #17181b;
-            --panel-edge: #3a3222;
-            --parchment: #ece6d6;
-            --dim: #9c9686;
-            --locked: #3a3a3d;
-            --locked-text: #66625a;
-            --gold: #c9a227;
-            --gold-glow: rgba(201,162,39,0.4);
-            --done: #7c9a5e;
-            --danger: #a4453c;
-            --warn: #c9843f;
-            --handle-size: 36px;
-            --touch-target: 48px;
-        }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--parchment); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; overscroll-behavior: none; }
-        body {
-            background-color: var(--bg);
-            background-image: radial-gradient(circle at 20% 30%, rgba(255,255,255,0.03), transparent 55%),
-                linear-gradient(150deg, rgba(255,255,255,0.01) 0%, transparent 50%);
-        }
-        header {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 20;
-            padding: calc(10px + env(safe-area-inset-top)) 12px 8px;
-            background: linear-gradient(180deg, rgba(13,13,15,0.98), rgba(13,13,15,0.9));
-            border-bottom: 1px solid var(--panel-edge);
-            backdrop-filter: blur(6px);
-            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-        }
-        header h1 { font-family: Georgia, 'Times New Roman', serif; font-size: 16px; letter-spacing: 0.1em; text-transform: uppercase; margin: 0; color: var(--parchment); white-space: nowrap; }
-        #progress-track { flex: 1; min-width: 70px; height: 5px; background: #232320; border-radius: 4px; overflow: hidden; }
-        #progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #8a6d1f, var(--gold)); transition: width .3s ease; }
-        #storage-badge { font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 12px; border: 1px solid var(--panel-edge); cursor: pointer; }
-        #storage-badge.bridge { color: var(--done); border-color: var(--done); }
-        #storage-badge.local { color: var(--gold); border-color: var(--gold); }
-        #storage-badge.memory { color: var(--warn); border-color: var(--warn); }
-        #ready-chip { font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 12px; border: 1px solid var(--gold); color: var(--gold); display: none; }
-        #ready-chip.show { display: inline-block; }
-        .header-btns { display: flex; gap: 6px; }
-        .header-btns button { font-size: 12px; font-weight: 600; padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; background: linear-gradient(180deg, #ddb43e, #b8860b); color: #1a1408; white-space: nowrap; }
-        .header-btns button:active { transform: scale(0.95); }
-        #memory-warning { display: none; position: fixed; top: calc(56px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 19; background: #2a1f13; border-bottom: 1px solid var(--warn); color: #e8c495; font-size: 10px; padding: 6px 12px; text-align: center; }
-        #memory-warning.show { display: block; }
-        #stage-wrap { position: absolute; top: calc(56px + env(safe-area-inset-top)); left: 0; right: 0; bottom: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
-        #stage-wrap.with-warning { top: calc(80px + env(safe-area-inset-top)); }
-        #canvas { transform-origin: 0 0; }
-        #stage { position: relative; }
-        svg#lines { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; }
-        svg#lines.edit-lines { pointer-events: auto; }
-        .path-line { fill: none; stroke: var(--locked); stroke-width: 2.5; transition: stroke .2s ease; marker-end: url(#arrowhead-locked); pointer-events: none; }
-        svg#lines.edit-lines .path-line { pointer-events: stroke; cursor: pointer; }
-        svg#lines.edit-lines .path-line:hover { stroke: var(--danger); stroke-width: 4; }
-        .path-line.active { stroke: var(--gold); marker-end: url(#arrowhead-gold); }
-        .path-line.done { stroke: var(--done); marker-end: url(#arrowhead-done); }
-        .path-line.flow { stroke-dasharray: 6 5; animation: flow .5s linear 3; }
-        @keyframes flow { to { stroke-dashoffset: -33; } }
-        .quest {
-            position: absolute; width: 160px; min-height: 104px; border-radius: 10px;
-            border: 1px solid var(--panel-edge); background: var(--panel);
-            padding: 24px 10px 10px; cursor: pointer; user-select: none; -webkit-user-select: none;
-            transition: transform .1s ease, box-shadow .2s ease, border-color .2s ease, opacity .2s ease;
-            z-index: 1; contain: layout style; will-change: transform;
-        }
-        .quest.edit-mode { cursor: grab; }
-        .quest.edit-mode:active { cursor: grabbing; }
-        .quest::before, .quest::after { content: ''; position: absolute; top: 5px; width: 4px; height: 4px; border-radius: 50%; background: var(--panel-edge); }
-        .quest::before { left: 7px; } .quest::after { right: 7px; }
-        .quest.available::before, .quest.available::after { background: var(--gold); }
-        .quest.done::before, .quest.done::after { background: var(--done); }
-        .quest:active { transform: scale(0.97); }
-        .icon-badge {
-            position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
-            width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 20px; background: #201f1a; border: 2px solid var(--locked);
-            box-shadow: 0 2px 6px rgba(0,0,0,0.5); transition: border-color .2s ease; z-index: 2; pointer-events: none;
-        }
-        .quest.available .icon-badge { border-color: var(--gold); box-shadow: 0 2px 6px rgba(0,0,0,0.5), 0 0 8px rgba(201,162,39,0.3); }
-        .quest.locked .icon-badge { filter: grayscale(0.6) brightness(0.7); }
-        .quest.done .icon-badge { border-color: var(--done); background: #1c2417; }
-        .quest .title {
-            font-family: Georgia, serif; font-weight: 700; font-size: 12px; line-height: 1.25;
-            margin: 0 0 3px; text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none;
-        }
-        .quest .desc {
-            font-size: 10px; line-height: 1.3; color: var(--dim); margin: 0 0 4px; text-align: center;
-            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none;
-        }
-        .quest .status { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 9px; font-weight: 700; letter-spacing: 0.05em; pointer-events: none; }
-        .quest .dot { width: 5px; height: 5px; border-radius: 50%; }
-        .quest.locked { opacity: 0.45; }
-        .quest.locked .title { color: var(--locked-text); }
-        .quest.available { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold-glow), 0 0 12px var(--gold-glow); }
-        .quest.done { border-color: var(--done); background: linear-gradient(180deg, var(--panel), #182015); }
-        .quest.done .title { text-decoration: line-through; text-decoration-color: rgba(236,230,214,0.4); }
-        .node-actions { position: absolute; top: -10px; right: -10px; display: none; gap: 4px; z-index: 3; }
-        .quest.edit-mode .node-actions { display: flex; }
-        .node-actions button {
-            width: 28px; height: 28px; border-radius: 50%; border: none; font-size: 14px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; color: #fff; background: var(--danger);
-        }
-        .node-actions .edit-btn { background: #4a5a72; }
-        .connector-handle {
-            display: none; position: absolute; bottom: calc(-1 * var(--handle-size) / 2); left: 50%; transform: translateX(-50%);
-            width: var(--handle-size); height: var(--handle-size); border-radius: 50%; z-index: 5;
-            background: var(--gold); border: 2.5px solid #17181b; color: #1a1408; align-items: center; justify-content: center;
-            font-size: 18px; font-weight: 700; cursor: grab; touch-action: none; pointer-events: auto;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-        }
-        .connector-handle::after { content: '+'; line-height: 1; }
-        .connector-handle::before { content: ''; position: absolute; inset: -12px; border-radius: 50%; }
-        .quest.edit-mode .connector-handle { display: flex; }
-        .quest.dragging-source { opacity: 0.5; }
-        .quest.drop-target { box-shadow: 0 0 0 3px var(--gold), 0 0 24px var(--gold-glow) !important; transform: scale(1.04); }
-        .quest.invalid-shake { animation: shakeInvalid .3s ease; border-color: var(--danger) !important; }
-        @keyframes shakeInvalid { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-5px);} 75%{transform:translateX(5px);} }
-        .quest.link-flash { animation: linkFlash .5s ease-out; }
-        @keyframes linkFlash { 0%{border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-glow);} 100%{border-color:var(--panel-edge);} }
-        #empty-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: var(--dim); font-size: 13px; width: 200px; pointer-events: none; }
-        #empty-hint b { color: var(--gold); }
-        #particles { position: fixed; inset: 0; pointer-events: none; z-index: 40; overflow: hidden; }
-        .particle { position: absolute; font-size: 16px; will-change: transform,opacity; }
-        #zoom-controls { position: fixed; bottom: calc(12px + env(safe-area-inset-bottom)); left: 12px; z-index: 20; display: flex; flex-direction: column; gap: 5px; }
-        #zoom-controls button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--parchment); font-size: 18px; font-weight: 600; cursor: pointer; }
-        #action-stack { position: fixed; bottom: calc(12px + env(safe-area-inset-bottom)); right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
-        #action-stack button { width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--panel-edge); background: var(--panel); color: var(--dim); font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        #action-stack button.active { background: var(--danger); color: #fff; border-color: var(--danger); box-shadow: 0 0 16px rgba(164,69,60,0.5); }
-        #celebrate { position: fixed; top: 0; left: 0; right: 0; z-index: 35; display: flex; justify-content: center; padding-top: 80px; pointer-events: none; opacity: 0; transition: opacity .5s ease; }
-        #celebrate.show { opacity: 1; }
-        #celebrate .banner { background: linear-gradient(180deg, #242017, #1c1b16); border: 1.5px solid var(--gold); color: var(--gold); font-family: Georgia, serif; font-weight: 700; font-size: 14px; padding: 10px 20px; border-radius: 20px; box-shadow: 0 0 24px var(--gold-glow); }
-        #overlay { position: fixed; inset: 0; background: rgba(4,4,5,0.8); z-index: 30; display: none; align-items: flex-end; justify-content: center; }
-        #overlay.show { display: flex; }
-        #sheet { width: 100%; max-width: 480px; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 16px 16px 0 0; padding: 16px; max-height: 85vh; overflow-y: auto; }
-        #sheet h2 { font-family: Georgia, serif; font-size: 16px; margin: 0 0 12px; }
-        #sheet label { display: block; font-size: 11px; color: var(--dim); margin: 10px 0 3px; font-weight: 600; }
-        #sheet input[type=text], #sheet textarea { width: 100%; background: #101011; border: 1px solid var(--panel-edge); border-radius: 8px; color: var(--parchment); padding: 10px; font-family: -apple-system, sans-serif; font-size: 14px; }
-        #sheet textarea { min-height: 48px; resize: vertical; }
-        #emoji-picker { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-        #emoji-picker button { width: 34px; height: 34px; font-size: 18px; border-radius: 8px; border: 1px solid var(--panel-edge); background: #101011; cursor: pointer; }
-        #emoji-picker button.picked { border-color: var(--gold); background: #2a2313; }
-        #prereq-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
-        .prereq-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 5px 8px; background: #101011; border: 1px solid var(--panel-edge); border-radius: 18px; color: var(--parchment); }
-        .prereq-pill button { width: 20px; height: 20px; border-radius: 50%; border: none; background: var(--danger); color: #fff; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        #prereq-hint { font-size: 11px; color: var(--locked-text); font-style: italic; margin-top: 6px; }
-        .sheet-actions { display: flex; gap: 10px; margin-top: 16px; }
-        .sheet-actions button { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: 700; font-size: 14px; cursor: pointer; }
-        #cancel-btn { background: #232320; color: var(--dim); }
-        #save-btn { background: linear-gradient(180deg, #ddb43e, #b8860b); color: #1a1408; }
-        #save-note { position: fixed; bottom: calc(12px + env(safe-area-inset-bottom)); left: 60px; font-size: 10px; color: var(--dim); opacity: 0; transition: opacity .3s; pointer-events: none; }
-        #save-note.show { opacity: 1; }
-        #drag-label { position: fixed; z-index: 46; pointer-events: none; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 14px; background: rgba(23,24,27,0.9); border: 1px solid var(--gold); color: var(--gold); box-shadow: 0 3px 12px rgba(0,0,0,0.5); display: none; white-space: nowrap; transform: translate(10px, -10px); }
-        #drag-label.show { display: block; }
-        #drag-label .label-target { color: var(--parchment); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Questbook</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Questbook">
+<meta name="theme-color" content="#0d0d0f">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<style>
+  :root{
+    --bg:#0d0d0f;
+    --panel:#17181b; --panel-edge:#3a3222;
+    --parchment:#ece6d6; --dim:#9c9686;
+    --locked:#3a3a3d; --locked-text:#66625a;
+    --gold:#c9a227; --gold-glow:rgba(201,162,39,0.45);
+    --done:#7c9a5e; --done-badge:#1c2417;
+    --danger:#a4453c; --warn:#c9843f;
+    --daily:#4ec3e0; --daily-glow:rgba(78,195,224,0.5);
+    --daily-panel:#121a20; --daily-edge:#1e3a48;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--parchment);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden;}
+  body{
+    background-color:var(--bg);
+    background-image:
+      radial-gradient(circle at 18% 22%, rgba(255,255,255,0.035), transparent 55%),
+      radial-gradient(circle at 82% 68%, rgba(255,255,255,0.028), transparent 60%),
+      linear-gradient(150deg, rgba(255,255,255,0.02) 0%, transparent 45%),
+      linear-gradient(330deg, rgba(201,162,39,0.035) 0%, transparent 40%),
+      radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.4) 100%);
+  }
+
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:20;
+    padding:calc(12px + env(safe-area-inset-top)) 16px 14px;
+    background:linear-gradient(180deg, rgba(13,13,15,0.98), rgba(13,13,15,0.88));
+    border-bottom:1px solid var(--panel-edge);
+    backdrop-filter:blur(6px);
+  }
+  header h1{
+    font-family:Georgia,'Times New Roman',serif; font-weight:700; font-size:18px;
+    letter-spacing:0.14em; text-transform:uppercase; margin:0; color:var(--parchment);
+  }
+  header .sub{ font-size:11px; color:var(--dim); margin-top:3px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  #storage-badge{ font-size:9.5px; font-weight:700; letter-spacing:0.02em; padding:2px 7px; border-radius:20px; border:1px solid var(--panel-edge); }
+  #storage-badge.bridge{ color:var(--done); border-color:var(--done); }
+  #storage-badge.local{ color:var(--gold); border-color:var(--gold); }
+  #storage-badge.memory{ color:var(--warn); border-color:var(--warn); }
+  #ready-chip{ font-size:9.5px; font-weight:700; letter-spacing:0.02em; padding:2px 7px; border-radius:20px; border:1px solid var(--gold); color:var(--gold); display:none; }
+  #ready-chip.show{ display:inline; }
+  #progress-track{ margin-top:10px; height:5px; border-radius:4px; background:#232320; overflow:hidden; }
+  #progress-fill{ height:100%; width:0%; border-radius:4px; background:linear-gradient(90deg, #8a6d1f, var(--gold)); transition:width .5s ease; }
+
+  #memory-warning{
+    display:none; position:fixed; top:calc(74px + env(safe-area-inset-top)); left:0; right:0; z-index:19;
+    background:#2a1f13; border-bottom:1px solid var(--warn); color:#e8c495;
+    font-size:11.5px; padding:8px 16px; text-align:center;
+  }
+  #memory-warning.show{ display:block; }
+
+  #stage-wrap{ position:absolute; top:calc(74px + env(safe-area-inset-top)); left:0; right:0; bottom:0; overflow:auto; -webkit-overflow-scrolling:touch; }
+  #stage-wrap.with-warning{ top:calc(108px + env(safe-area-inset-top)); }
+  #canvas{ transform-origin:0 0; transition:transform .25s ease; }
+  #stage{ position:relative; }
+
+  svg#lines{ position:absolute; top:0; left:0; pointer-events:none; }
+  .path-line{ fill:none; stroke:var(--locked); stroke-width:2.5; transition:stroke .3s ease, stroke-width .2s ease; }
+  .path-line.active{ stroke:var(--gold); }
+  .path-line.done{ stroke:var(--done); }
+  .path-line.flow{ stroke-dasharray:7 5; animation:flow .55s linear 3; }
+  @keyframes flow{ to{ stroke-dashoffset:-36; } }
+  .path-hit{ fill:none; stroke:transparent; stroke-width:28; pointer-events:none; cursor:pointer; }
+  svg#lines.edit-mode .path-hit{ pointer-events:stroke; }
+  svg#lines.edit-mode .path-line{ stroke-width:3; transition:stroke .15s ease, stroke-width .15s ease; }
+  svg#lines.edit-mode .path-hit:hover + .path-line,
+  svg#lines.edit-mode .path-line:hover{ stroke:var(--danger) !important; stroke-width:3.5; }
+
+  .quest{
+    position:absolute; width:172px; min-height:118px;
+    border-radius:12px; border:1.5px solid var(--panel-edge);
+    background:var(--panel);
+    box-shadow:0 6px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+    padding:30px 12px 12px;
+    cursor:grab; user-select:none; touch-action:none;
+    transition:transform .14s ease, box-shadow .22s ease, border-color .2s ease;
+    overflow:visible;
+  }
+  .quest.type-daily{
+    background:linear-gradient(165deg, #141c24 0%, var(--daily-panel) 100%);
+    border-color:var(--daily-edge);
+  }
+  @media (hover:hover){
+    .quest:hover{ transform:translateY(-3px); box-shadow:0 10px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05); }
+  }
+  .quest::before, .quest::after{
+    content:''; position:absolute; top:12px; width:7px; height:7px; background:var(--panel-edge);
+    transform:rotate(45deg); z-index:2;
+  }
+  .quest::before{ left:10px; } .quest::after{ right:10px; }
+  .quest.available::before, .quest.available::after{ background:var(--gold); }
+  .quest.type-daily.available::before, .quest.type-daily.available::after{ background:var(--daily); }
+  .quest.done::before, .quest.done::after{ background:var(--done); }
+  .quest:active{ transform:scale(0.96); cursor:grabbing; }
+
+  .type-strip{ position:absolute; top:0; left:0; right:0; height:5px; }
+  .type-strip.perm{ background:linear-gradient(90deg, #8a6d1f, var(--gold)); }
+  .type-strip.daily{ background:linear-gradient(90deg, #1a6a8a, var(--daily)); box-shadow:0 0 8px var(--daily-glow); }
+
+  .type-tag{
+    display:block; text-align:center; font-size:8px; font-weight:800; letter-spacing:0.09em;
+    padding:2px 6px; border-radius:4px; margin:6px auto 0; width:fit-content;
+  }
+  .type-tag.perm{ color:#1a1408; background:var(--gold); }
+  .type-tag.daily{ color:#041218; background:var(--daily); box-shadow:0 0 6px var(--daily-glow); }
+
+  .icon-badge{
+    position:absolute; top:-24px; left:50%; transform:translateX(-50%);
+    width:46px; height:46px; border-radius:50%; z-index:4;
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px; background:#201f1a; border:2.5px solid var(--locked);
+    box-shadow:0 4px 8px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.1), inset 0 -2px 3px rgba(0,0,0,0.45);
+    transition:border-color .3s ease, box-shadow .3s ease, background .3s ease;
+  }
+  .quest.type-daily .icon-badge{ background:#152028; }
+  .icon-badge::before, .icon-badge::after{
+    content:''; position:absolute; inset:-7px; border-radius:50%;
+    border:2px solid var(--gold); opacity:0; pointer-events:none;
+  }
+  .quest.type-daily .icon-badge::before{ border-color:var(--daily); }
+  .quest.available .icon-badge{ border-color:var(--gold); box-shadow:0 4px 8px rgba(0,0,0,0.55), 0 0 12px rgba(201,162,39,0.4); }
+  .quest.type-daily.available .icon-badge{ border-color:var(--daily); box-shadow:0 4px 8px rgba(0,0,0,0.55), 0 0 14px rgba(78,195,224,0.5); }
+  .quest.available .icon-badge::before{ animation:breatheRing 2.5s ease-in-out infinite; }
+  @keyframes breatheRing{
+    0%,100%{ transform:scale(0.82); opacity:0.55; }
+    50%{ transform:scale(1.25); opacity:0; }
+  }
+  .quest.locked .icon-badge{ border-color:var(--locked); filter:grayscale(0.65) brightness(0.65); }
+  .quest.done .icon-badge{ border-color:var(--done); background:var(--done-badge); }
+
+  .icon-badge.just-unlocked::after{ animation:unlockRing 1s ease-out 2; }
+  @keyframes unlockRing{
+    0%{ transform:scale(0.8); opacity:0.75; }
+    100%{ transform:scale(1.7); opacity:0; }
+  }
+  @keyframes stamp{
+    0%{ transform:translateX(-50%) scale(1); }
+    35%{ transform:translateX(-50%) scale(1.4) rotate(-8deg); }
+    60%{ transform:translateX(-50%) scale(0.92) rotate(4deg); }
+    100%{ transform:translateX(-50%) scale(1) rotate(0deg); }
+  }
+  .icon-badge.stamp{ animation:stamp .5s ease; }
+
+  @keyframes cardIn{
+    from{ opacity:0; transform:translateY(10px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .quest.card-in{ animation:cardIn .4s ease both; }
+
+  .quest .title{
+    font-family:Georgia,'Times New Roman',serif; font-weight:700; font-size:12.5px; line-height:1.25;
+    letter-spacing:0.02em; margin:0 0 4px; text-align:center;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .quest .desc{
+    font-size:10.5px; line-height:1.32; color:var(--dim); margin:0; text-align:center;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .quest .status{
+    display:flex; align-items:center; justify-content:center; gap:4px; margin-top:9px;
+    font-size:9.5px; font-weight:700; letter-spacing:0.05em; padding:3px 9px; border-radius:20px;
+  }
+  .quest.locked .status{ color:var(--locked-text); background:rgba(102,98,90,0.14); }
+  .quest.available .status{ color:var(--gold); background:rgba(201,162,39,0.15); }
+  .quest.type-daily.available .status{ color:var(--daily); background:rgba(78,195,224,0.16); }
+  .quest.done .status{ color:var(--done); background:rgba(124,154,94,0.16); }
+
+  .node-actions{ position:absolute; top:-11px; right:-11px; display:none; gap:5px; touch-action:auto; z-index:5; }
+  .quest.edit-mode .node-actions{ display:flex; }
+  .node-actions button{
+    width:28px; height:28px; border-radius:50%; border:none; font-size:13px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    box-shadow:0 2px 6px rgba(0,0,0,0.4); transition:transform .12s ease;
+  }
+  .node-actions button:active{ transform:scale(0.9); }
+  .node-actions .edit-btn{ background:#4a5a72; }
+  .node-actions .del-btn{ background:var(--danger); }
+
+  .quest.locked{ border-color:#28271f; opacity:0.48; }
+  .quest.type-daily.locked{ border-color:#1a2a32; }
+  .quest.locked .title{ color:var(--locked-text); }
+
+  .quest.available{ border-color:var(--gold); box-shadow:0 6px 14px rgba(0,0,0,0.4), 0 0 0 1.5px var(--gold-glow), 0 0 22px var(--gold-glow); }
+  .quest.type-daily.available{ border-color:var(--daily); box-shadow:0 6px 14px rgba(0,0,0,0.4), 0 0 0 1.5px var(--daily-glow), 0 0 24px var(--daily-glow); }
+
+  .quest.done{ border-color:var(--done); background:linear-gradient(180deg, var(--panel), #182015); }
+  .quest.type-daily.done{ background:linear-gradient(180deg, #141c24, #121a16); }
+  .quest.done .title{ text-decoration:line-through; text-decoration-color:rgba(236,230,214,0.4); }
+
+  .quest.dragging-source{ opacity:0.55; }
+  .quest.drop-target{ box-shadow:0 0 0 3px var(--gold), 0 0 20px var(--gold-glow) !important; }
+  @keyframes shakeInvalid{
+    0%,100%{ transform:translateX(0); }
+    25%{ transform:translateX(-6px); }
+    75%{ transform:translateX(6px); }
+  }
+  .quest.invalid-shake{ animation:shakeInvalid .3s ease; border-color:var(--danger) !important; }
+
+  #empty-hint{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:var(--dim); font-size:13px; width:250px; }
+  #empty-hint .glyph{ font-size:30px; display:block; margin-bottom:10px; opacity:0.7; }
+  #empty-hint b{ color:var(--gold); font-family:Georgia,'Times New Roman',serif; }
+
+  #particles{ position:fixed; inset:0; pointer-events:none; z-index:40; overflow:hidden; }
+  .particle{ position:absolute; font-size:18px; will-change:transform,opacity; }
+
+  #zoom-controls{ position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); left:16px; z-index:20; display:flex; flex-direction:column; gap:6px; }
+  #zoom-controls button{
+    width:38px; height:38px; border-radius:10px; border:1px solid var(--panel-edge);
+    background:var(--panel); color:var(--parchment); font-size:16px; font-weight:600; cursor:pointer;
+  }
+  #zoom-controls button:active{ transform:scale(0.94); }
+
+  #action-stack{ position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); right:16px; z-index:20; display:flex; flex-direction:row; gap:8px; }
+  #action-stack button{
+    width:48px; height:48px; border-radius:50%; border:1px solid var(--panel-edge);
+    background:linear-gradient(180deg, #23242a, #17181b); color:var(--parchment); font-size:19px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #new-quest-btn{ background:linear-gradient(180deg, #ddb43e, #b8860b) !important; color:#1a1408 !important; border:none !important; }
+  #edit-toggle.active{ background:linear-gradient(180deg, #c1554a, #8f342a) !important; color:#fff; border-color:var(--danger); }
+
+  #celebrate{
+    position:fixed; top:0; left:0; right:0; z-index:35;
+    display:flex; justify-content:center; padding-top:90px;
+    pointer-events:none; opacity:0; transition:opacity .5s ease;
+  }
+  #celebrate.show{ opacity:1; }
+  #celebrate .banner{
+    background:linear-gradient(180deg, #242017, #1c1b16); border:1.5px solid var(--gold);
+    color:var(--gold); font-family:Georgia,'Times New Roman',serif; font-weight:700; font-size:13px;
+    letter-spacing:0.04em;
+    padding:10px 18px; border-radius:20px; box-shadow:0 0 24px var(--gold-glow);
+  }
+
+  #overlay, #confirm-overlay{ position:fixed; inset:0; background:rgba(4,4,5,0.78); display:none; align-items:flex-end; justify-content:center; }
+  #overlay{ z-index:30; }
+  #confirm-overlay{ z-index:50; align-items:center; padding:20px; }
+  #overlay.show, #confirm-overlay.show{ display:flex; }
+  #sheet{ width:100%; max-width:480px; background:var(--panel); border:1px solid var(--panel-edge); border-radius:16px 16px 0 0; padding:18px 18px 22px; max-height:84vh; overflow-y:auto; }
+  #sheet h2{ font-family:Georgia,'Times New Roman',serif; font-size:16px; margin:0 0 14px; letter-spacing:0.03em; }
+  #sheet label{ display:block; font-size:11px; color:var(--dim); margin:12px 0 5px; font-weight:600; }
+  #sheet input[type=text], #sheet textarea{
+    width:100%; background:#101011; border:1px solid var(--panel-edge); border-radius:8px;
+    color:var(--parchment); padding:9px 10px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px;
+  }
+  #sheet textarea{ min-height:52px; resize:vertical; }
+
+  #confirm-box{ max-width:340px; width:100%; background:var(--panel); border:1px solid var(--panel-edge); border-radius:14px; padding:20px; }
+  #confirm-message{ font-size:13.5px; line-height:1.5; color:var(--parchment); margin:0 0 16px; }
+  #confirm-box .row{ display:flex; gap:10px; }
+  #confirm-box button{ flex:1; padding:11px; border-radius:9px; border:none; font-weight:700; font-size:13.5px; cursor:pointer; }
+  #confirm-cancel{ background:#232320; color:var(--dim); }
+  #confirm-ok{ background:var(--danger); color:#fff; }
+
+  .type-row{ display:flex; gap:8px; }
+  .type-row button{
+    flex:1; padding:9px 4px; border-radius:8px; border:1.5px solid var(--panel-edge); background:#101011;
+    color:var(--dim); font-size:12px; font-weight:700; cursor:pointer;
+  }
+  .type-row button.picked.perm{ border-color:var(--gold); color:var(--gold); background:#231c10; }
+  .type-row button.picked.daily{ border-color:var(--daily); color:var(--daily); background:#0c222b; }
+
+  .emoji-row{ display:flex; align-items:center; gap:8px; }
+  #emoji-input{ width:56px !important; flex:none; text-align:center; font-size:20px !important; padding:6px !important; }
+  #emoji-picker{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  #emoji-picker button{ width:34px; height:34px; font-size:17px; border-radius:8px; border:1px solid var(--panel-edge); background:#101011; cursor:pointer; }
+  #emoji-picker button.picked{ border-color:var(--gold); background:#2a2313; }
+
+  #prereq-pills{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .prereq-pill{
+    display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:5px 6px 5px 10px;
+    background:#101011; border:1px solid var(--panel-edge); border-radius:20px; color:var(--parchment);
+  }
+  .prereq-pill button{
+    width:18px; height:18px; border-radius:50%; border:none; background:var(--danger); color:#fff;
+    font-size:11px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  #prereq-hint{ font-size:11.5px; color:var(--locked-text); font-style:italic; margin-top:6px; }
+
+  .sheet-actions{ display:flex; gap:10px; margin-top:18px; }
+  .sheet-actions button{ flex:1; padding:11px; border-radius:9px; border:none; font-weight:700; font-size:13.5px; cursor:pointer; }
+  #cancel-btn{ background:#232320; color:var(--dim); }
+  #save-btn{ background:linear-gradient(180deg, #ddb43e, #b8860b); color:#1a1408; }
+
+  #save-note{
+    position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); left:66px; font-size:10px; color:var(--dim);
+    opacity:0; transition:opacity .3s ease; pointer-events:none;
+  }
+  #save-note.show{ opacity:1; }
+
+  #edit-mode-hint{
+    position:fixed; top:calc(74px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    background:#1c1613; border:1px solid var(--gold); color:var(--gold); font-size:11px;
+    padding:6px 14px; border-radius:20px; z-index:19; display:none; white-space:nowrap;
+  }
+  #edit-mode-hint.show{ display:block; }
+</style>
 </head>
 <body>
-    <header>
-        <h1>Questbook</h1>
-        <div id="progress-track"><div id="progress-fill"></div></div>
-        <span id="ready-chip"></span>
-        <span id="storage-badge"></span>
-        <div class="header-btns">
-            <button id="new-quest-btn">+ New</button>
+
+<header>
+  <h1>Questbook</h1>
+  <div class="sub"><span id="progress-sub">loading…</span><span id="ready-chip"></span><span id="storage-badge"></span></div>
+  <div id="progress-track"><div id="progress-fill"></div></div>
+</header>
+<div id="memory-warning">⚠️ No persistent storage found here yet — tap the badge above to recheck.</div>
+<div id="edit-mode-hint">Drag card → link · Tap line → cut</div>
+<div id="celebrate"><div class="banner">🏆 Quest tree complete</div></div>
+
+<div id="stage-wrap">
+  <div id="canvas">
+    <div id="stage">
+      <svg id="lines"></svg>
+      <div id="empty-hint"><span class="glyph">🏛️</span>No quests yet.<br><b>Tap the + below</b><br>to start your tree.</div>
+    </div>
+  </div>
+</div>
+
+<div id="zoom-controls">
+  <button id="zoom-in" aria-label="Zoom in">+</button>
+  <button id="zoom-reset" aria-label="Reset zoom">⤢</button>
+  <button id="zoom-out" aria-label="Zoom out">–</button>
+</div>
+<div id="action-stack">
+  <button id="new-quest-btn" aria-label="Add new quest">+</button>
+  <button id="edit-toggle" aria-label="Toggle edit mode" title="Toggle edit mode">✎</button>
+</div>
+<div id="particles"></div>
+<svg id="drag-preview" style="position:fixed;inset:0;pointer-events:none;z-index:45;width:100vw;height:100vh;"></svg>
+<div id="save-note">saved ✓</div>
+
+<div id="overlay">
+  <div id="sheet">
+    <h2 id="sheet-title">New Quest</h2>
+
+    <label>Type</label>
+    <div class="type-row">
+      <button type="button" class="perm" data-type="permanent">Permanent</button>
+      <button type="button" class="daily" data-type="daily">Daily</button>
+    </div>
+
+    <label>Icon</label>
+    <div class="emoji-row">
+      <input type="text" id="emoji-input" maxlength="4" value="⚔️">
+      <div style="font-size:11px;color:var(--dim);">Type any emoji, or pick below</div>
+    </div>
+    <div id="emoji-picker"></div>
+
+    <label>Title</label>
+    <input type="text" id="q-title" maxlength="70" placeholder="e.g. Slay the goblin king">
+    <label>Description</label>
+    <textarea id="q-desc" placeholder="What needs to happen here?"></textarea>
+
+    <label>Depends on</label>
+    <div id="prereq-pills"></div>
+    <div id="prereq-hint">Drag from another quest onto this one on the canvas to connect it.</div>
+
+    <div class="sheet-actions">
+      <button id="cancel-btn">Cancel</button>
+      <button id="save-btn">Save Quest</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirm-overlay">
+  <div id="confirm-box">
+    <p id="confirm-message"></p>
+    <div class="row">
+      <button id="confirm-cancel">Cancel</button>
+      <button id="confirm-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const EMOJI_SET = ['⚔️','🛡️','🏹','🗡️','🔥','❄️','💀','👑','🏰','🗺️','💰','📜','🔑','🐉','⭐','✅','📦','🧪','🔮','🛠️','🎯','📚','🧭','⛏️','🌿','🏺','🦌'];
+  const STORAGE_KEY = 'questbook-quests-v1';
+
+  let quests = [];
+  let dailyKey = null;
+  let selectedType = 'permanent';
+  let editMode = false;
+  let editingId = null;
+  let storageMode = 'memory';
+  let zoom = 1;
+  let celebrated = false;
+  let firstRender = true;
+
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('canvas');
+  const svg = document.getElementById('lines');
+  const emptyHint = document.getElementById('empty-hint');
+  const progressSub = document.getElementById('progress-sub');
+  const progressFill = document.getElementById('progress-fill');
+  const readyChip = document.getElementById('ready-chip');
+  const storageBadge = document.getElementById('storage-badge');
+  const memoryWarning = document.getElementById('memory-warning');
+  const editModeHint = document.getElementById('edit-mode-hint');
+  const stageWrap = document.getElementById('stage-wrap');
+  const overlay = document.getElementById('overlay');
+  const editToggle = document.getElementById('edit-toggle');
+  const particlesLayer = document.getElementById('particles');
+  const saveNote = document.getElementById('save-note');
+  const celebrateEl = document.getElementById('celebrate');
+  const dragPreview = document.getElementById('drag-preview');
+
+  function uid(){ return 'q' + Math.random().toString(36).slice(2,9); }
+  function vibrate(ms){ try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} }
+
+  // ---- Custom confirm dialog ----
+  // iOS blocks window.confirm()/alert() entirely for standalone home-screen
+  // web apps, so a native confirm() silently does nothing there. This is a
+  // real in-DOM modal instead, which works regardless of how the app is launched.
+  const confirmOverlay = document.getElementById('confirm-overlay');
+  const confirmMessage = document.getElementById('confirm-message');
+  const confirmCancelBtn = document.getElementById('confirm-cancel');
+  const confirmOkBtn = document.getElementById('confirm-ok');
+  let confirmResolver = null;
+  function showConfirm(message){
+    confirmMessage.textContent = message;
+    confirmOverlay.classList.add('show');
+    return new Promise(resolve=>{ confirmResolver = resolve; });
+  }
+  confirmCancelBtn.addEventListener('click', ()=>{
+    confirmOverlay.classList.remove('show');
+    if(confirmResolver){ confirmResolver(false); confirmResolver = null; }
+  });
+  confirmOkBtn.addEventListener('click', ()=>{
+    confirmOverlay.classList.remove('show');
+    if(confirmResolver){ confirmResolver(true); confirmResolver = null; }
+  });
+
+  // ---- Zurich-time daily reset (3:00 AM cutoff) ----
+  function zurichDayKey(){
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone:'Europe/Zurich', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', hour12:false
+    });
+    const parts = fmt.formatToParts(now).reduce((acc,p)=>{ acc[p.type]=p.value; return acc; }, {});
+    let y = parseInt(parts.year,10), m = parseInt(parts.month,10), d = parseInt(parts.day,10);
+    const h = parseInt(parts.hour === '24' ? '0' : parts.hour, 10);
+    if(h < 3){
+      const dt = new Date(Date.UTC(y, m-1, d));
+      dt.setUTCDate(dt.getUTCDate()-1);
+      y = dt.getUTCFullYear(); m = dt.getUTCMonth()+1; d = dt.getUTCDate();
+    }
+    return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  }
+
+  function purgeDailyQuests(){
+    const removedIds = new Set(quests.filter(q=>q.type==='daily').map(q=>q.id));
+    if(!removedIds.size) return false;
+    quests = quests.filter(q=>q.type!=='daily');
+    quests.forEach(q=>{ q.prereqIds = q.prereqIds.filter(id=>!removedIds.has(id)); });
+    celebrated = quests.length>0 && quests.every(x=>x.done);
+    return true;
+  }
+
+  function checkDailyReset(){
+    const currentKey = zurichDayKey();
+    if(dailyKey !== null && dailyKey !== currentKey){
+      const changed = purgeDailyQuests();
+      dailyKey = currentKey;
+      if(changed){ saveQuests(); render(); }
+    } else if(dailyKey === null){
+      dailyKey = currentKey;
+    }
+  }
+
+  async function detectStorageMode(){
+    try{
+      if(window.storage && typeof window.storage.set === 'function'){
+        await window.storage.set('__probe__', '1', false);
+        const r = await window.storage.get('__probe__', false);
+        if(r && r.value === '1'){ await window.storage.delete('__probe__', false); return 'bridge'; }
+      }
+    }catch(e){}
+    try{
+      localStorage.setItem('__probe__', '1');
+      if(localStorage.getItem('__probe__') === '1'){ localStorage.removeItem('__probe__'); return 'local'; }
+    }catch(e){}
+    return 'memory';
+  }
+
+  function updateStorageBadge(){
+    storageBadge.className = storageMode;
+    storageBadge.textContent = storageMode === 'bridge' ? 'synced'
+      : storageMode === 'local' ? 'saved on this device'
+      : 'not saving · tap to recheck';
+    storageBadge.style.cursor = 'pointer';
+    const showWarn = storageMode === 'memory';
+    memoryWarning.classList.toggle('show', showWarn);
+    stageWrap.classList.toggle('with-warning', showWarn);
+  }
+
+  storageBadge.addEventListener('click', async ()=>{
+    const prevMode = storageMode;
+    storageBadge.textContent = 'checking…';
+    storageMode = await detectStorageMode();
+    if(storageMode !== prevMode && storageMode !== 'memory'){ await saveQuests(); }
+    updateStorageBadge();
+  });
+
+  function normalizeQuest(q){
+    return {
+      id: (q && typeof q.id === 'string') ? q.id : uid(),
+      title: (q && typeof q.title === 'string' && q.title.trim()) ? q.title : 'Untitled Quest',
+      desc: (q && typeof q.desc === 'string') ? q.desc : '',
+      icon: (q && typeof q.icon === 'string' && q.icon) ? q.icon : '⚔️',
+      type: (q && q.type === 'daily') ? 'daily' : 'permanent',
+      prereqIds: (q && Array.isArray(q.prereqIds)) ? q.prereqIds.filter(id=>typeof id === 'string') : [],
+      done: !!(q && q.done)
+    };
+  }
+
+  async function loadQuests(){
+    storageMode = await detectStorageMode();
+    updateStorageBadge();
+    let raw = null;
+    try{
+      if(storageMode === 'bridge'){
+        const res = await window.storage.get('quests', false);
+        raw = res && res.value ? JSON.parse(res.value) : null;
+      } else if(storageMode === 'local'){
+        const stored = localStorage.getItem(STORAGE_KEY);
+        raw = stored ? JSON.parse(stored) : null;
+      }
+    }catch(e){ raw = null; }
+
+    if(Array.isArray(raw)){
+      quests = raw.map(normalizeQuest);
+      dailyKey = zurichDayKey();
+    } else if(raw && Array.isArray(raw.quests)){
+      quests = raw.quests.map(normalizeQuest);
+      dailyKey = typeof raw.dailyKey === 'string' ? raw.dailyKey : zurichDayKey();
+    } else {
+      quests = seedQuests();
+      dailyKey = zurichDayKey();
+      await saveQuests();
+    }
+
+    checkDailyReset();
+    celebrated = quests.length>0 && quests.every(q=>q.done);
+    render();
+    setInterval(checkDailyReset, 60000);
+  }
+
+  let saveNoteTimer;
+  async function saveQuests(){
+    try{
+      const payload = JSON.stringify({ quests, dailyKey });
+      if(storageMode === 'bridge'){ await window.storage.set('quests', payload, false); }
+      else if(storageMode === 'local'){ localStorage.setItem(STORAGE_KEY, payload); }
+      else { return; }
+      saveNote.classList.add('show');
+      clearTimeout(saveNoteTimer);
+      saveNoteTimer = setTimeout(()=>saveNote.classList.remove('show'), 1000);
+    }catch(e){}
+  }
+
+  function seedQuests(){
+    const a = uid(), b = uid(), c = uid();
+    return [
+      {id:a, title:'Sharpen the Blade', desc:'No prereqs — start here.', icon:'⚔️', type:'permanent', prereqIds:[], done:false},
+      {id:b, title:'Scout the Ridge', desc:'Runs in parallel with the first.', icon:'🗺️', type:'permanent', prereqIds:[], done:false},
+      {id:c, title:'Confront the Boss', desc:'Locked until both above are done.', icon:'🐉', type:'permanent', prereqIds:[a,b], done:false},
+    ];
+  }
+
+  function tierOf(q, cache, visiting){
+    visiting = visiting || new Set();
+    if(cache.has(q.id)) return cache.get(q.id);
+    if(visiting.has(q.id)) return 0;
+    if(!q.prereqIds.length){ cache.set(q.id,0); return 0; }
+    visiting.add(q.id);
+    const t = 1 + Math.max(...q.prereqIds.map(id=>{
+      const p = quests.find(x=>x.id===id);
+      return p ? tierOf(p, cache, visiting) : 0;
+    }));
+    visiting.delete(q.id);
+    cache.set(q.id, t);
+    return t;
+  }
+
+  function isLocked(q){
+    return q.prereqIds.some(id=>{
+      const p = quests.find(x=>x.id===id);
+      return !p || !p.done;
+    });
+  }
+
+  function dependsOn(candidateId, targetId, seen){
+    seen = seen || new Set();
+    if(candidateId === targetId) return true;
+    if(seen.has(candidateId)) return false;
+    seen.add(candidateId);
+    const q = quests.find(x=>x.id===candidateId);
+    if(!q) return false;
+    return q.prereqIds.some(id=>dependsOn(id, targetId, seen));
+  }
+
+  const NODE_W = 172, NODE_H = 118, COL_GAP = 28, ROW_GAP = 100, PAD = 52;
+
+  function layout(){
+    const cache = new Map();
+    const tiers = {};
+    quests.forEach(q=>{ const t = tierOf(q, cache); (tiers[t] = tiers[t] || []).push(q); });
+    const tierKeys = Object.keys(tiers).map(Number).sort((a,b)=>a-b);
+
+    const orderIndex = {};
+    tierKeys.forEach(t=>{
+      const row = tiers[t];
+      if(t === tierKeys[0]){
+        row.forEach((q,i)=>{ orderIndex[q.id] = i; });
+        return;
+      }
+      const withScore = row.map((q,i)=>{
+        const parentIdx = q.prereqIds.map(id=>orderIndex[id]).filter(v=>v!==undefined);
+        const score = parentIdx.length ? parentIdx.reduce((a,b)=>a+b,0)/parentIdx.length : i;
+        return {q, score, i};
+      });
+      withScore.sort((a,b)=> a.score - b.score || a.i - b.i);
+      tiers[t] = withScore.map(x=>x.q);
+      tiers[t].forEach((q,i)=>{ orderIndex[q.id] = i; });
+    });
+
+    let maxCols = 1;
+    tierKeys.forEach(t=>{ maxCols = Math.max(maxCols, tiers[t].length); });
+    const stageW = Math.max(window.innerWidth, PAD*2 + maxCols*(NODE_W+COL_GAP));
+    const positions = {};
+    tierKeys.forEach(t=>{
+      const row = tiers[t];
+      const rowW = row.length*(NODE_W+COL_GAP) - COL_GAP;
+      const startX = (stageW - rowW)/2;
+      row.forEach((q,i)=>{ positions[q.id] = { x: startX + i*(NODE_W+COL_GAP), y: PAD + t*(NODE_H+ROW_GAP) }; });
+    });
+    const stageH = PAD*2 + (tierKeys.length ? (Math.max(...tierKeys)+1) : 1) * (NODE_H+ROW_GAP);
+    return {positions, stageW, stageH};
+  }
+
+  function escapeHtml(s){
+    return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  const ARROW_DEFS = `
+    <defs>
+      <marker id="arrow-locked" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#3a3a3d"/></marker>
+      <marker id="arrow-active" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#c9a227"/></marker>
+      <marker id="arrow-done" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7c9a5e"/></marker>
+    </defs>`;
+
+  function render(justUnlockedIds, stampId){
+    justUnlockedIds = justUnlockedIds || [];
+    emptyHint.style.display = quests.length ? 'none' : 'block';
+    svg.classList.toggle('edit-mode', editMode);
+    editModeHint.classList.toggle('show', editMode && quests.length>0);
+
+    const doneCount = quests.filter(q=>q.done).length;
+    const total = quests.length;
+    progressSub.textContent = total ? `${doneCount} / ${total} quests complete` : 'your quest tree, from scratch';
+    progressFill.style.width = total ? Math.round(doneCount/total*100)+'%' : '0%';
+
+    const readyCount = quests.filter(q=>!q.done && !isLocked(q)).length;
+    readyChip.textContent = readyCount === 1 ? '1 ready' : `${readyCount} ready`;
+    readyChip.classList.toggle('show', readyCount > 0);
+
+    stage.querySelectorAll('.quest').forEach(n=>n.remove());
+
+    if(!total){
+      svg.innerHTML=''; stage.style.width='100%'; stage.style.height='100%'; return;
+    }
+
+    const {positions, stageW, stageH} = layout();
+    stage.style.width = stageW + 'px';
+    stage.style.height = stageH + 'px';
+
+    const frag = document.createDocumentFragment();
+    const elById = {};
+    quests.forEach((q, idx)=>{
+      const pos = positions[q.id];
+      const locked = isLocked(q);
+      const statusClass = q.done ? 'done' : (locked ? 'locked' : 'available');
+      const typeClass = q.type === 'daily' ? 'type-daily' : 'type-perm';
+      const el = document.createElement('div');
+      el.className = `quest ${statusClass} ${typeClass}` + (editMode ? ' edit-mode' : '') + (firstRender ? ' card-in' : '');
+      if(firstRender){ el.style.animationDelay = Math.min(idx * 30, 400) + 'ms'; }
+      el.dataset.id = q.id;
+      el.style.left = pos.x + 'px';
+      el.style.top = pos.y + 'px';
+      const statusLabel = q.done ? '✓ COMPLETE' : (locked ? '🔒 LOCKED' : '✦ READY');
+      const badgeExtra = justUnlockedIds.includes(q.id) ? ' just-unlocked' : (stampId===q.id ? ' stamp' : '');
+      el.innerHTML = `
+        <div class="type-strip ${q.type==='daily'?'daily':'perm'}"></div>
+        <div class="node-actions">
+          <button type="button" class="edit-btn" aria-label="Edit quest">✎</button>
+          <button type="button" class="del-btn" aria-label="Delete quest">×</button>
         </div>
-    </header>
-    <div id="memory-warning">⚠️ No persistent storage — tap badge to recheck.</div>
-    <div id="celebrate"><div class="banner">🏆 Quest tree complete</div></div>
-    <div id="stage-wrap">
-        <div id="canvas">
-            <div id="stage">
-                <svg id="lines"></svg>
-                <div id="empty-hint">No quests yet.<br><b>Tap "+ New"</b></div>
-            </div>
-        </div>
-    </div>
-    <div id="zoom-controls">
-        <button id="zoom-in">+</button>
-        <button id="zoom-reset">⤢</button>
-        <button id="zoom-out">–</button>
-    </div>
-    <div id="action-stack">
-        <button id="edit-toggle" title="Toggle edit mode">✎</button>
-    </div>
-    <div id="particles"></div>
-    <svg id="drag-preview" style="position:fixed;inset:0;pointer-events:none;z-index:45;width:100vw;height:100vh;"></svg>
-    <div id="drag-label"></div>
-    <div id="save-note">saved ✓</div>
-    <div id="overlay">
-        <div id="sheet">
-            <h2 id="sheet-title">New Quest</h2>
-            <label>Icon</label>
-            <div style="display:flex;gap:6px;align-items:center;">
-                <input type="text" id="emoji-input" maxlength="4" value="⚔️" style="width:54px;text-align:center;font-size:20px;">
-                <span style="font-size:11px;color:var(--dim);">type or pick</span>
-            </div>
-            <div id="emoji-picker"></div>
-            <label>Title</label>
-            <input type="text" id="q-title" maxlength="70" placeholder="Quest name">
-            <label>Description</label>
-            <textarea id="q-desc" placeholder="What needs to happen?"></textarea>
-            <label>Depends on</label>
-            <div id="prereq-pills"></div>
-            <div id="prereq-hint">Drag from ➕ handle to connect. Click a line in edit mode to cut.</div>
-            <div class="sheet-actions">
-                <button id="cancel-btn">Cancel</button>
-                <button id="save-btn">Save Quest</button>
-            </div>
-        </div>
-    </div>
+        <div class="icon-badge${badgeExtra}">${q.icon}</div>
+        <p class="title">${escapeHtml(q.title)}</p>
+        <p class="desc">${escapeHtml(q.desc||'')}</p>
+        <div class="status">${statusLabel}</div>
+        <div class="type-tag ${q.type==='daily'?'daily':'perm'}">${q.type==='daily'?'DAILY':'PERMANENT'}</div>
+      `;
+      const editBtn = el.querySelector('.edit-btn');
+      const delBtn = el.querySelector('.del-btn');
+      editBtn.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); openSheet(q.id); });
+      delBtn.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); deleteQuest(q.id); });
+      // also stop pointerdown so drag logic never starts on the buttons
+      editBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); });
+      delBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); });
+      frag.appendChild(el);
+      elById[q.id] = el;
+    });
+    stage.appendChild(frag);
+    firstRender = false;
 
-    <script>
-        (function() {
-            const EMOJI_SET = ['⚔️','🛡️','🏹','🗡️','🔥','❄️','💀','👑','🏰','🗺️','💰','📜','🔑','🐉','⭐','✅','📦','🧪','🔮','🛠️','🎯','📚','🧭','⛏️','🌿','🏺','🦌'];
-            const LOCAL_KEY = 'questbook-quests-v1';
+    const bottomOf = {};
+    quests.forEach(q=>{ bottomOf[q.id] = positions[q.id].y + elById[q.id].offsetHeight; });
 
-            let quests = [];
-            let editMode = false;
-            let editingId = null;
-            let storageMode = 'memory';
-            let zoom = 1;
-            let celebrated = false;
-            let firstRender = true;
+    let lines = ARROW_DEFS;
+    quests.forEach(q=>{
+      const to = positions[q.id];
+      q.prereqIds.forEach(pid=>{
+        const p = quests.find(x=>x.id===pid);
+        if(!p) return;
+        const from = positions[pid];
+        const x1 = from.x + NODE_W/2, y1 = bottomOf[pid];
+        const x2 = to.x + NODE_W/2, y2 = to.y + 2;
+        const midY = (y1+y2)/2;
+        let cls = q.done ? 'done' : (p.done ? 'active' : '');
+        const markerId = cls === 'done' ? 'arrow-done' : (cls === 'active' ? 'arrow-active' : 'arrow-locked');
+        const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+        let visCls = cls;
+        if(justUnlockedIds.includes(q.id)) visCls += ' flow';
+        lines += `<path class="path-line ${visCls}" marker-end="url(#${markerId})" d="${d}"/>`;
+        lines += `<path class="path-hit" data-from="${pid}" data-to="${q.id}" d="${d}"/>`;
+      });
+    });
+    svg.setAttribute('width', stageW);
+    svg.setAttribute('height', stageH);
+    svg.setAttribute('viewBox', `0 0 ${stageW} ${stageH}`);
+    svg.innerHTML = lines;
+  }
 
-            let dragSourceId = null;
-            let dragAnchor = null;
-            let didDrag = false;
-            let dragMoveCount = 0;
-            let autoScrollInterval = null;
-            const DRAG_THRESHOLD = 6;
-            const EDGE_SCROLL_ZONE = 50;
-            const EDGE_SCROLL_SPEED = 12;
+  // Tap a connector line while in edit mode to cut that specific link.
+  svg.addEventListener('click', (e)=>{
+    if(!editMode) return;
+    const hit = e.target.closest('.path-hit');
+    if(!hit) return;
+    const fromId = hit.dataset.from, toId = hit.dataset.to;
+    const target = quests.find(q=>q.id===toId);
+    if(!target) return;
+    target.prereqIds = target.prereqIds.filter(id=>id!==fromId);
+    vibrate(15);
+    burstConfetti({getBoundingClientRect:()=>({left:e.clientX-4, top:e.clientY-4, width:8})}, ['✂️'], 5);
+    celebrated = quests.length>0 && quests.every(x=>x.done);
+    saveQuests();
+    render();
+  });
 
-            const stage = document.getElementById('stage');
-            const canvas = document.getElementById('canvas');
-            const svg = document.getElementById('lines');
-            const emptyHint = document.getElementById('empty-hint');
-            const progressFill = document.getElementById('progress-fill');
-            const readyChip = document.getElementById('ready-chip');
-            const storageBadge = document.getElementById('storage-badge');
-            const memoryWarning = document.getElementById('memory-warning');
-            const stageWrap = document.getElementById('stage-wrap');
-            const overlay = document.getElementById('overlay');
-            const editToggle = document.getElementById('edit-toggle');
-            const particlesLayer = document.getElementById('particles');
-            const saveNote = document.getElementById('save-note');
-            const celebrateEl = document.getElementById('celebrate');
-            const dragPreview = document.getElementById('drag-preview');
-            const dragLabel = document.getElementById('drag-label');
+  // ---- Drag-to-connect: press anywhere on a quest card and drag onto another
+  // to link them (drag the same pair again to unlink). Works in any mode.
+  const DRAG_THRESHOLD = 10;
 
-            const uid = () => 'q' + Math.random().toString(36).slice(2, 9);
-            const vibrate = (ms) => { try { navigator.vibrate?.(ms); } catch(e){} };
-            const escapeHtml = (s) => (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function toggleLink(sourceId, targetId){
+    const source = quests.find(q=>q.id===sourceId);
+    const target = quests.find(q=>q.id===targetId);
+    if(!source || !target) return;
+    const reject = ()=>{
+      vibrate([10,30,10]);
+      const node = stage.querySelector(`[data-id="${targetId}"]`);
+      if(node){ node.classList.add('invalid-shake'); setTimeout(()=>node.classList.remove('invalid-shake'), 320); }
+    };
 
-            async function detectStorageMode() {
-                try { if (window.storage?.set) { await window.storage.set('__probe__','1',false); const r = await window.storage.get('__probe__',false); if(r?.value==='1'){ await window.storage.delete('__probe__',false); return 'bridge'; } } } catch(e){}
-                try { localStorage.setItem('__probe__','1'); if(localStorage.getItem('__probe__')==='1'){ localStorage.removeItem('__probe__'); return 'local'; } } catch(e){}
-                return 'memory';
-            }
-            function updateStorageBadge() {
-                storageBadge.className = storageMode;
-                storageBadge.textContent = storageMode==='bridge'?'synced':storageMode==='local'?'saved':'not saving';
-                memoryWarning.classList.toggle('show', storageMode==='memory');
-                stageWrap.classList.toggle('with-warning', storageMode==='memory');
-            }
-            storageBadge.addEventListener('click', async()=>{
-                storageBadge.textContent = 'checking…';
-                storageMode = await detectStorageMode();
-                if(storageMode!=='memory') await saveQuests();
-                updateStorageBadge();
-            });
+    if(target.prereqIds.includes(sourceId)){
+      target.prereqIds = target.prereqIds.filter(id=>id!==sourceId);
+      vibrate(10);
+    } else {
+      if(dependsOn(sourceId, targetId)){ reject(); return; }
+      if(target.type === 'permanent' && source.type === 'daily'){ reject(); return; }
+      target.prereqIds.push(sourceId);
+      vibrate(15);
+    }
+    celebrated = quests.length>0 && quests.every(x=>x.done);
+    saveQuests();
+    render();
+  }
 
-            let saveTimer;
-            async function saveQuests() {
-                try {
-                    if (storageMode==='bridge') await window.storage.set('quests', JSON.stringify(quests), false);
-                    else if (storageMode==='local') localStorage.setItem(LOCAL_KEY, JSON.stringify(quests));
-                    else return;
-                    saveNote.classList.add('show');
-                    clearTimeout(saveTimer);
-                    saveTimer = setTimeout(()=>saveNote.classList.remove('show'), 900);
-                } catch(e){}
-            }
-            function debouncedSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveQuests, 300); }
+  function updateDragPreview(anchor, x2, y2){
+    const {x:x1, y:y1} = anchor;
+    const midY = (y1+y2)/2;
+    dragPreview.innerHTML = `<path class="path-line active" marker-end="url(#arrow-active)" d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}"/>`;
+    const hoverEl = document.elementFromPoint(x2, y2);
+    const questUnder = hoverEl && hoverEl.closest('.quest');
+    stage.querySelectorAll('.quest.drop-target').forEach(n=>n.classList.remove('drop-target'));
+    if(questUnder){ questUnder.classList.add('drop-target'); }
+  }
 
-            function normalizeQuest(q) {
-                return {
-                    id: typeof q?.id === 'string' ? q.id : uid(),
-                    title: typeof q?.title === 'string' && q.title.trim() ? q.title : 'Untitled',
-                    desc: typeof q?.desc === 'string' ? q.desc : '',
-                    icon: typeof q?.icon === 'string' && q.icon ? q.icon : '⚔️',
-                    prereqIds: Array.isArray(q?.prereqIds) ? q.prereqIds.filter(id=>typeof id==='string') : [],
-                    done: !!q?.done
-                };
-            }
-            async function loadQuests() {
-                storageMode = await detectStorageMode();
-                updateStorageBadge();
-                let raw = null;
-                try {
-                    if (storageMode==='bridge') { const r = await window.storage.get('quests',false); raw = r?.value ? JSON.parse(r.value) : null; }
-                    else if (storageMode==='local') { raw = localStorage.getItem(LOCAL_KEY) ? JSON.parse(localStorage.getItem(LOCAL_KEY)) : null; }
-                } catch(e){}
-                quests = Array.isArray(raw) ? raw.map(normalizeQuest) : seedQuests();
-                if (!Array.isArray(raw)) await saveQuests();
-                celebrated = quests.length>0 && quests.every(q=>q.done);
-                render();
-            }
-            function seedQuests() {
-                const a=uid(), b=uid(), c=uid();
-                return [
-                    {id:a, title:'Sharpen the Blade', desc:'No prereqs — start here.', icon:'⚔️', prereqIds:[], done:false},
-                    {id:b, title:'Scout the Ridge', desc:'Runs in parallel.', icon:'🗺️', prereqIds:[], done:false},
-                    {id:c, title:'Confront the Boss', desc:'Locked until both above done.', icon:'🐉', prereqIds:[a,b], done:false},
-                ];
-            }
+  stage.addEventListener('pointerdown', (e)=>{
+    if(e.target.closest('.node-actions') || e.target.closest('button')) return;
+    const questEl = e.target.closest('.quest');
+    if(!questEl) return;
+    const id = questEl.dataset.id;
+    const startX = e.clientX, startY = e.clientY;
+    let dragging = false;
+    let anchor = null;
 
-            function tierOf(q, cache=new Map(), visiting=new Set()) {
-                if(cache.has(q.id)) return cache.get(q.id);
-                if(visiting.has(q.id)) return 0;
-                if(!q.prereqIds.length){ cache.set(q.id,0); return 0; }
-                visiting.add(q.id);
-                const t = 1 + Math.max(...q.prereqIds.map(id=>{ const p=quests.find(x=>x.id===id); return p?tierOf(p,cache,visiting):0; }));
-                visiting.delete(q.id);
-                cache.set(q.id,t);
-                return t;
-            }
-            function dependsOn(candidateId, targetId, seen=new Set()) {
-                if(candidateId===targetId) return true;
-                if(seen.has(candidateId)) return false;
-                seen.add(candidateId);
-                const q = quests.find(x=>x.id===candidateId);
-                return q ? q.prereqIds.some(id=>dependsOn(id,targetId,seen)) : false;
-            }
-            function isLocked(q){ return q.prereqIds.some(id=>{ const p=quests.find(x=>x.id===id); return !p||!p.done; }); }
+    const onMove = (ev)=>{
+      const dx = ev.clientX-startX, dy = ev.clientY-startY;
+      if(!dragging && Math.hypot(dx,dy) > DRAG_THRESHOLD){
+        dragging = true;
+        questEl.classList.add('dragging-source');
+        const r = questEl.getBoundingClientRect();
+        anchor = { x: r.left + r.width/2, y: r.top + r.height };
+      }
+      if(dragging){ updateDragPreview(anchor, ev.clientX, ev.clientY); }
+    };
+    const onUp = (ev)=>{
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      if(dragging){
+        dragPreview.innerHTML = '';
+        stage.querySelectorAll('.quest.drop-target, .quest.dragging-source').forEach(n=>{
+          n.classList.remove('drop-target'); n.classList.remove('dragging-source');
+        });
+        const hoverEl = document.elementFromPoint(ev.clientX, ev.clientY);
+        const targetEl = hoverEl && hoverEl.closest('.quest');
+        if(targetEl && targetEl.dataset.id !== id){
+          toggleLink(id, targetEl.dataset.id);
+        }
+      } else {
+        const q = quests.find(x=>x.id===id);
+        if(q && !editMode && !isLocked(q)) completeToggle(q, questEl);
+      }
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp, {once:true});
+  });
 
-            const NODE_W=160, NODE_H=100, COL_GAP=24, ROW_GAP=92, PAD=36;
-            function layout() {
-                const cache=new Map(), tiers={};
-                quests.forEach(q=>{ const t=tierOf(q,cache); (tiers[t]=tiers[t]||[]).push(q); });
-                const tierKeys=Object.keys(tiers).map(Number).sort((a,b)=>a-b);
-                const orderIndex={};
-                tierKeys.forEach(t=>{
-                    const row=tiers[t];
-                    if(t===tierKeys[0]){ row.forEach((q,i)=>orderIndex[q.id]=i); return; }
-                    const scored=row.map((q,i)=>{ const p=q.prereqIds.map(id=>orderIndex[id]).filter(v=>v!==undefined); return {q, score:p.length?p.reduce((a,b)=>a+b,0)/p.length:i, i}; });
-                    scored.sort((a,b)=>a.score-b.score||a.i-b.i);
-                    tiers[t]=scored.map(x=>x.q);
-                    tiers[t].forEach((q,i)=>orderIndex[q.id]=i);
-                });
-                let maxCols=1; tierKeys.forEach(t=>maxCols=Math.max(maxCols,tiers[t].length));
-                const stageW=Math.max(window.innerWidth, PAD*2+maxCols*(NODE_W+COL_GAP));
-                const positions={};
-                tierKeys.forEach(t=>{
-                    const row=tiers[t], rowW=row.length*(NODE_W+COL_GAP)-COL_GAP, startX=(stageW-rowW)/2;
-                    row.forEach((q,i)=>positions[q.id]={x:startX+i*(NODE_W+COL_GAP), y:PAD+t*(NODE_H+ROW_GAP)});
-                });
-                const stageH=PAD*2+(tierKeys.length?(Math.max(...tierKeys)+1):1)*(NODE_H+ROW_GAP);
-                return {positions, stageW, stageH};
-            }
+  // edit/delete buttons now have direct listeners attached in render() for reliability
 
-            function render(justUnlockedIds=[], stampId=null) {
-                emptyHint.style.display = quests.length ? 'none':'block';
-                const total=quests.length, doneCount=quests.filter(q=>q.done).length;
-                progressFill.style.width = total ? Math.round(doneCount/total*100)+'%':'0%';
-                const readyCount=quests.filter(q=>!q.done&&!isLocked(q)).length;
-                readyChip.textContent = readyCount?`${readyCount} ready`:'';
-                readyChip.classList.toggle('show', readyCount>0);
-                stage.querySelectorAll('.quest').forEach(n=>n.remove());
-                if(!total){ svg.innerHTML=''; stage.style.width='100%'; stage.style.height='100%'; return; }
-                const {positions, stageW, stageH} = layout();
-                stage.style.width=stageW+'px'; stage.style.height=stageH+'px';
-                const frag=document.createDocumentFragment(), elById={};
-                quests.forEach((q,idx)=>{
-                    const pos=positions[q.id], locked=isLocked(q), cls=q.done?'done':(locked?'locked':'available');
-                    const el=document.createElement('div');
-                    el.className=`quest ${cls}${editMode?' edit-mode':''}${firstRender?' card-in':''}`;
-                    if(firstRender) el.style.animationDelay=Math.min(idx*25,300)+'ms';
-                    el.dataset.id=q.id; el.style.left=pos.x+'px'; el.style.top=pos.y+'px';
-                    const label=q.done?'COMPLETE':(locked?'LOCKED':'AVAILABLE');
-                    const badgeExtra=justUnlockedIds.includes(q.id)?' just-unlocked':(stampId===q.id?' stamp':'');
-                    el.innerHTML=`<div class="node-actions"><button class="edit-btn">✎</button><button class="del-btn">×</button></div><div class="icon-badge${badgeExtra}">${q.icon}</div><p class="title">${escapeHtml(q.title)}</p><p class="desc">${escapeHtml(q.desc||'')}</p><div class="status"><span class="dot"></span>${label}</div><div class="connector-handle"></div>`;
-                    frag.appendChild(el); elById[q.id]=el;
-                });
-                stage.appendChild(frag); firstRender=false;
-                const bottomOf={}; quests.forEach(q=>bottomOf[q.id]=positions[q.id].y+elById[q.id].offsetHeight);
-                const defs=`<defs><marker id="arrowhead-locked" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#3a3a3d"/></marker><marker id="arrowhead-gold" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#c9a227"/></marker><marker id="arrowhead-done" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,4 L0,8 Z" fill="#7c9a5e"/></marker></defs>`;
-                let lines=''; quests.forEach(q=>{ const to=positions[q.id]; q.prereqIds.forEach(pid=>{ const p=quests.find(x=>x.id===pid); if(!p)return; const from=positions[pid]; const x1=from.x+NODE_W/2,y1=bottomOf[pid],x2=to.x+NODE_W/2,y2=to.y+2,midY=(y1+y2)/2; let cls=q.done?'done':(p.done?'active':''); if(justUnlockedIds.includes(q.id))cls+=' flow'; lines+=`<path class="path-line ${cls}" data-source-id="${pid}" data-target-id="${q.id}" d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}"/>`; }); });
-                svg.setAttribute('width',stageW); svg.setAttribute('height',stageH); svg.setAttribute('viewBox',`0 0 ${stageW} ${stageH}`);
-                svg.innerHTML=defs+lines; svg.classList.toggle('edit-lines', editMode);
-            }
+  function cascadeUncheck(id){
+    quests.forEach(q=>{
+      if(q.done && q.prereqIds.includes(id)){
+        q.done = false;
+        cascadeUncheck(q.id);
+      }
+    });
+  }
 
-            // Toggle link between quests
-            function toggleLink(sourceId, targetId) {
-                const target = quests.find(q=>q.id===targetId); if(!target) return;
-                if (target.prereqIds.includes(sourceId)) { target.prereqIds=target.prereqIds.filter(id=>id!==sourceId); vibrate(10); flashCard(targetId,'disconnect'); }
-                else {
-                    if (dependsOn(sourceId,targetId)) { vibrate([10,30,10]); const el=stage.querySelector(`[data-id="${targetId}"]`); if(el){el.classList.add('invalid-shake'); setTimeout(()=>el.classList.remove('invalid-shake'),300);} return; }
-                    target.prereqIds.push(sourceId); vibrate(15); flashCard(targetId,'connect');
-                }
-                celebrated = quests.every(x=>x.done); debouncedSave(); render();
-            }
-            function flashCard(id, type) {
-                const el = stage.querySelector(`[data-id="${id}"]`); if(!el) return;
-                el.classList.add('link-flash'); setTimeout(()=>el.classList.remove('link-flash'),500);
-                const rect=el.getBoundingClientRect(); const bits=type==='connect'?['🔗','✨']:['✂️','💨'];
-                for(let i=0;i<4;i++){ const p=document.createElement('div'); p.className='particle'; p.textContent=bits[i%bits.length]; const a=Math.random()*Math.PI*2, d=15+Math.random()*30; p.style.left=(rect.left+rect.width/2)+'px'; p.style.top=(rect.top+5)+'px'; particlesLayer.appendChild(p); p.animate([{transform:'translate(0,0) scale(0.6)',opacity:1},{transform:`translate(${Math.cos(a)*d}px,${Math.sin(a)*d-15}px) scale(1)`,opacity:0}],{duration:400,easing:'ease-out'}).onfinish=()=>p.remove(); }
-            }
+  function completeToggle(q, el){
+    const wasDone = q.done;
 
-            function updateDragPreview(x2,y2) {
-                if(!dragAnchor) return; const {x:x1,y:y1}=dragAnchor, midY=(y1+y2)/2;
-                dragPreview.innerHTML=`<path class="path-line active" d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}" style="stroke-width:2.5;"/>`;
-                const hoverEl=document.elementFromPoint(x2,y2); const questUnder=hoverEl?.closest('.quest');
-                stage.querySelectorAll('.quest.drop-target').forEach(n=>n.classList.remove('drop-target'));
-                if(questUnder&&questUnder.dataset.id!==dragSourceId){ questUnder.classList.add('drop-target'); const tq=quests.find(q=>q.id===questUnder.dataset.id); if(tq){ const existing=tq.prereqIds.includes(dragSourceId); dragLabel.innerHTML=existing?`✂️ Remove from "${escapeHtml(tq.title)}"`:`🔗 Connect to "${escapeHtml(tq.title)}"`; dragLabel.classList.add('show'); dragLabel.style.left=(x2+10)+'px'; dragLabel.style.top=(y2-8)+'px'; } } else dragLabel.classList.remove('show');
-            }
-            function stopAutoScroll(){ if(autoScrollInterval){clearInterval(autoScrollInterval);autoScrollInterval=null;} }
-            function startAutoScroll(cx,cy){ stopAutoScroll(); const r=stageWrap.getBoundingClientRect(); autoScrollInterval=setInterval(()=>{ if(cy<r.top+EDGE_SCROLL_ZONE) stageWrap.scrollTop-=EDGE_SCROLL_SPEED; else if(cy>r.bottom-EDGE_SCROLL_ZONE) stageWrap.scrollTop+=EDGE_SCROLL_SPEED; if(cx<r.left+EDGE_SCROLL_ZONE) stageWrap.scrollLeft-=EDGE_SCROLL_SPEED; else if(cx>r.right-EDGE_SCROLL_ZONE) stageWrap.scrollLeft+=EDGE_SCROLL_SPEED; },16); }
+    if(!wasDone){
+      const lockedBefore = new Set(quests.filter(x=>isLocked(x)).map(x=>x.id));
+      q.done = true;
+      saveQuests();
+      vibrate(15);
+      burstConfetti(el, ['✨','🎉','⭐']);
+      const lockedAfter = new Set(quests.filter(x=>isLocked(x)).map(x=>x.id));
+      const justUnlocked = [...lockedBefore].filter(id=>!lockedAfter.has(id));
+      render(justUnlocked, q.id);
+      setTimeout(()=>{
+        document.querySelectorAll('.icon-badge.just-unlocked, .icon-badge.stamp').forEach(b=>{
+          b.classList.remove('just-unlocked'); b.classList.remove('stamp');
+        });
+      }, 1100);
 
-            stage.addEventListener('pointerdown',(e)=>{
-                const handle=e.target.closest('.connector-handle'); if(!handle||!editMode) return;
-                e.preventDefault(); e.stopPropagation(); const questEl=handle.closest('.quest'); if(!questEl) return;
-                dragSourceId=questEl.dataset.id; const r=handle.getBoundingClientRect(); dragAnchor={x:r.left+r.width/2,y:r.top+r.height/2};
-                questEl.classList.add('dragging-source'); didDrag=false; dragMoveCount=0; dragLabel.classList.remove('show'); updateDragPreview(dragAnchor.x,dragAnchor.y);
-                const onMove=(ev)=>{ dragMoveCount++; if(dragMoveCount>3||Math.abs(ev.clientX-dragAnchor.x)>DRAG_THRESHOLD||Math.abs(ev.clientY-dragAnchor.y)>DRAG_THRESHOLD) didDrag=true; updateDragPreview(ev.clientX,ev.clientY); const r2=stageWrap.getBoundingClientRect(); const near=ev.clientY<r2.top+EDGE_SCROLL_ZONE||ev.clientY>r2.bottom-EDGE_SCROLL_ZONE||ev.clientX<r2.left+EDGE_SCROLL_ZONE||ev.clientX>r2.right-EDGE_SCROLL_ZONE; near?(!autoScrollInterval&&startAutoScroll(ev.clientX,ev.clientY)):stopAutoScroll(); };
-                const onUp=(ev)=>{ document.removeEventListener('pointermove',onMove); document.removeEventListener('pointerup',onUp); stopAutoScroll(); dragPreview.innerHTML=''; dragLabel.classList.remove('show'); stage.querySelectorAll('.quest.drop-target,.quest.dragging-source').forEach(n=>{n.classList.remove('drop-target');n.classList.remove('dragging-source');}); if(didDrag){ const target=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.quest'); if(target&&target.dataset.id!==dragSourceId) toggleLink(dragSourceId,target.dataset.id); } dragSourceId=null; dragAnchor=null; didDrag=false; dragMoveCount=0; };
-                document.addEventListener('pointermove',onMove); document.addEventListener('pointerup',onUp);
-            });
+      const allDone = quests.length>0 && quests.every(x=>x.done);
+      if(allDone && !celebrated){
+        celebrated = true;
+        setTimeout(()=>{
+          vibrate([20,40,20]);
+          celebrateEl.classList.add('show');
+          burstConfetti({getBoundingClientRect:()=>({left:window.innerWidth/2-4, top:window.innerHeight*0.35, width:8})}, ['🏆','✨','🎉','⭐'], 26);
+          setTimeout(()=>celebrateEl.classList.remove('show'), 2400);
+        }, 350);
+      }
+    } else {
+      q.done = false;
+      cascadeUncheck(q.id);
+      celebrated = false;
+      saveQuests();
+      render();
+    }
+  }
 
-            // Click to cut line in edit mode
-            svg.addEventListener('click',(e)=>{
-                if(!editMode) return; const path=e.target.closest('.path-line'); if(!path) return;
-                e.stopPropagation(); const sid=path.dataset.sourceId, tid=path.dataset.targetId;
-                const target=quests.find(q=>q.id===tid); if(target?.prereqIds.includes(sid)){ target.prereqIds=target.prereqIds.filter(id=>id!==sid); vibrate(10); celebrated=quests.every(x=>x.done); debouncedSave(); render(); }
-            });
+  function burstConfetti(nodeEl, bits, count){
+    bits = bits || ['✨','🎉','⭐'];
+    count = count || 12;
+    const rect = nodeEl.getBoundingClientRect();
+    const cx = rect.left + rect.width/2, cy = rect.top + 10;
+    for(let i=0;i<count;i++){
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.textContent = bits[Math.floor(Math.random()*bits.length)];
+      const angle = Math.random()*Math.PI*2;
+      const dist = 36 + Math.random()*80;
+      const dx = Math.cos(angle)*dist, dy = Math.sin(angle)*dist - 30;
+      p.style.left = cx + 'px'; p.style.top = cy + 'px';
+      particlesLayer.appendChild(p);
+      p.animate([
+        { transform:'translate(0,0) scale(0.6)', opacity:1 },
+        { transform:`translate(${dx}px, ${dy}px) scale(1.2)`, opacity:0 }
+      ], { duration: 650 + Math.random()*350, easing:'ease-out' }).onfinish = ()=> p.remove();
+    }
+  }
 
-            stage.addEventListener('click',(e)=>{
-                if(didDrag){e.preventDefault();e.stopPropagation();didDrag=false;return;}
-                const el=e.target.closest('.quest'); if(!el) return; const q=quests.find(x=>x.id===el.dataset.id); if(!q) return;
-                const btn=e.target.closest('.del-btn,.edit-btn');
-                if(btn){ e.stopPropagation(); if(btn.classList.contains('del-btn')) deleteQuest(q.id); else openSheet(q.id); return; }
-                if(editMode) return; if(isLocked(q)) return; completeToggle(q,el);
-            });
+  async function deleteQuest(id){
+    const q = quests.find(x=>x.id===id);
+    if(!q) return;
+    const dependents = quests.filter(x=>x.prereqIds.includes(id));
+    const warning = dependents.length
+      ? `"${q.title}" — ${dependents.length} other quest(s) depend on it and will lose that prerequisite. Delete anyway?`
+      : `Delete "${q.title}"? This can't be undone.`;
+    const ok = await showConfirm(warning);
+    if(!ok) return;
+    quests = quests.filter(x=>x.id!==id);
+    quests.forEach(x=>{ x.prereqIds = x.prereqIds.filter(p=>p!==id); });
+    saveQuests();
+    render();
+  }
 
-            function completeToggle(q,el){
-                const wasDone=q.done;
-                if(!wasDone){ const lockedBefore=new Set(quests.filter(x=>isLocked(x)).map(x=>x.id)); q.done=true; debouncedSave(); vibrate(15); burstConfetti(el,['✨','🎉']); const lockedAfter=new Set(quests.filter(x=>isLocked(x)).map(x=>x.id)); const justUnlocked=[...lockedBefore].filter(id=>!lockedAfter.has(id)); render(justUnlocked,q.id); const allDone=quests.every(x=>x.done); if(allDone&&!celebrated){ celebrated=true; setTimeout(()=>{vibrate([20,40,20]); celebrateEl.classList.add('show'); burstConfetti({getBoundingClientRect:()=>({left:window.innerWidth/2-4,top:window.innerHeight*0.3,width:8})},['🏆','✨','⭐'],20); setTimeout(()=>celebrateEl.classList.remove('show'),2000);},300);} }
-                else { q.done=false; cascadeUncheck(q.id); celebrated=false; debouncedSave(); render(); }
-            }
-            function cascadeUncheck(id){ quests.forEach(q=>{ if(q.done&&q.prereqIds.includes(id)){ q.done=false; cascadeUncheck(q.id);} }); }
-            function burstConfetti(nodeEl,bits=['✨','🎉'],count=8){ const rect=nodeEl.getBoundingClientRect(); const cx=rect.left+rect.width/2,cy=rect.top+8; for(let i=0;i<count;i++){ const p=document.createElement('div'); p.className='particle'; p.textContent=bits[i%bits.length]; const a=Math.random()*Math.PI*2,d=25+Math.random()*50; p.style.left=cx+'px';p.style.top=cy+'px'; particlesLayer.appendChild(p); p.animate([{transform:'translate(0,0) scale(0.5)',opacity:1},{transform:`translate(${Math.cos(a)*d}px,${Math.sin(a)*d-20}px) scale(1)`,opacity:0}],{duration:500+Math.random()*300,easing:'ease-out'}).onfinish=()=>p.remove(); } }
-            function deleteQuest(id){ const q=quests.find(x=>x.id===id); if(!q)return; const deps=quests.filter(x=>x.prereqIds.includes(id)); const msg=deps.length?`"${q.title}" — ${deps.length} quest(s) depend on it. Delete anyway?`:`Delete "${q.title}"?`; if(!confirm(msg))return; quests=quests.filter(x=>x.id!==id); quests.forEach(x=>x.prereqIds=x.prereqIds.filter(p=>p!==id)); debouncedSave(); render(); }
+  editToggle.addEventListener('click', ()=>{
+    editMode = !editMode;
+    editToggle.classList.toggle('active', editMode);
+    render();
+  });
 
-            editToggle.addEventListener('click',()=>{ editMode=!editMode; editToggle.classList.toggle('active',editMode); render(); });
+  function applyZoom(){ canvas.style.transform = `scale(${zoom})`; }
+  document.getElementById('zoom-in').addEventListener('click', ()=>{ zoom = Math.min(1.4, zoom + 0.15); applyZoom(); });
+  document.getElementById('zoom-out').addEventListener('click', ()=>{ zoom = Math.max(0.55, zoom - 0.15); applyZoom(); });
+  document.getElementById('zoom-reset').addEventListener('click', ()=>{ zoom = 1; applyZoom(); });
 
-            // Zoom controls
-            function applyZoom(){ canvas.style.transform=`scale(${zoom})`; }
-            document.getElementById('zoom-in').addEventListener('click',()=>{zoom=Math.min(1.6,zoom+0.2);applyZoom();});
-            document.getElementById('zoom-out').addEventListener('click',()=>{zoom=Math.max(0.5,zoom-0.2);applyZoom();});
-            document.getElementById('zoom-reset').addEventListener('click',()=>{zoom=1;applyZoom();});
+  const newBtn = document.getElementById('new-quest-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  const saveBtn = document.getElementById('save-btn');
+  const sheetTitle = document.getElementById('sheet-title');
+  const titleInput = document.getElementById('q-title');
+  const descInput = document.getElementById('q-desc');
+  const emojiInput = document.getElementById('emoji-input');
+  const emojiPicker = document.getElementById('emoji-picker');
+  const prereqPills = document.getElementById('prereq-pills');
+  const prereqHint = document.getElementById('prereq-hint');
+  const typeRow = document.querySelector('.type-row');
 
-            // Sheet management
-            const newBtn=document.getElementById('new-quest-btn'), cancelBtn=document.getElementById('cancel-btn'), saveBtn=document.getElementById('save-btn');
-            const sheetTitle=document.getElementById('sheet-title'), titleInput=document.getElementById('q-title'), descInput=document.getElementById('q-desc');
-            const emojiInput=document.getElementById('emoji-input'), emojiPicker=document.getElementById('emoji-picker'), prereqList=document.getElementById('prereq-pills');
+  EMOJI_SET.forEach(em=>{
+    const b = document.createElement('button');
+    b.type='button'; b.textContent = em;
+    b.addEventListener('click', ()=>{
+      emojiInput.value = em;
+      emojiPicker.querySelectorAll('button').forEach(x=>x.classList.remove('picked'));
+      b.classList.add('picked');
+    });
+    emojiPicker.appendChild(b);
+  });
 
-            EMOJI_SET.forEach(em=>{ const b=document.createElement('button'); b.type='button'; b.textContent=em; b.addEventListener('click',()=>{emojiInput.value=em; emojiPicker.querySelectorAll('button').forEach(x=>x.classList.remove('picked')); b.classList.add('picked');}); emojiPicker.appendChild(b); });
+  typeRow.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      selectedType = b.dataset.type;
+      typeRow.querySelectorAll('button').forEach(x=>x.classList.remove('picked'));
+      b.classList.add('picked');
+    });
+  });
 
-            function openSheet(editId){ editingId=editId||null; const eq=editingId?quests.find(q=>q.id===editingId):null; sheetTitle.textContent=eq?'Edit Quest':'New Quest'; saveBtn.textContent=eq?'Save Changes':'Save Quest'; titleInput.value=eq?.title||''; descInput.value=eq?.desc||''; emojiInput.value=eq?.icon||'⚔️'; emojiPicker.querySelectorAll('button').forEach(b=>b.classList.toggle('picked',b.textContent===emojiInput.value)); prereqList.innerHTML=''; const selectable=quests.filter(q=>{ if(q.id===editingId)return false; if(editingId&&dependsOn(q.id,editingId))return false; return true; }); if(!selectable.length){ prereqList.innerHTML='<div style="font-size:11px;color:var(--locked-text);">No other quests yet.</div>'; } else { selectable.forEach(q=>{ const pill=document.createElement('span'); pill.className='prereq-pill'; const checked=eq?.prereqIds.includes(q.id); pill.innerHTML=`${q.icon} ${escapeHtml(q.title)} <button data-toggle="${q.id}" style="${checked?'background:var(--done);':''}">${checked?'✓':'+'}</button>`; const btn=pill.querySelector('button'); btn.addEventListener('click',()=>{ if(btn.style.background==='var(--done)'){btn.style.background='';btn.textContent='+';}else{btn.style.background='var(--done)';btn.textContent='✓';} }); prereqList.appendChild(pill); }); } overlay.classList.add('show'); setTimeout(()=>titleInput.focus(),50); }
-            function closeSheet(){ overlay.classList.remove('show'); editingId=null; }
+  function renderPrereqPills(){
+    const editingQuest = editingId ? quests.find(q=>q.id===editingId) : null;
+    prereqPills.innerHTML = '';
+    if(!editingQuest || !editingQuest.prereqIds.length){
+      prereqHint.style.display = 'block';
+      return;
+    }
+    prereqHint.style.display = 'none';
+    editingQuest.prereqIds.forEach(pid=>{
+      const p = quests.find(q=>q.id===pid);
+      if(!p) return;
+      const pill = document.createElement('span');
+      pill.className = 'prereq-pill';
+      pill.innerHTML = `${p.icon} ${escapeHtml(p.title)} <button aria-label="Remove dependency">×</button>`;
+      pill.querySelector('button').addEventListener('click', ()=>{
+        editingQuest.prereqIds = editingQuest.prereqIds.filter(x=>x!==pid);
+        saveQuests();
+        renderPrereqPills();
+      });
+      prereqPills.appendChild(pill);
+    });
+  }
 
-            newBtn.addEventListener('click',()=>openSheet(null)); cancelBtn.addEventListener('click',closeSheet); overlay.addEventListener('click',e=>{if(e.target===overlay)closeSheet();});
-            saveBtn.addEventListener('click',()=>{ const title=titleInput.value.trim(); if(!title){titleInput.focus();return;} const desc=descInput.value.trim(), icon=emojiInput.value.trim()||'⚔️'; const prereqIds=Array.from(prereqList.querySelectorAll('button[data-toggle]')).filter(b=>b.style.background==='var(--done)').map(b=>b.dataset.toggle); if(editingId){ const q=quests.find(x=>x.id===editingId); Object.assign(q,{title,desc,icon,prereqIds}); celebrated=quests.every(x=>x.done); } else { quests.push({id:uid(),title,desc,icon,prereqIds,done:false}); celebrated=false; } debouncedSave(); render(); closeSheet(); });
+  function openSheet(editId){
+    editingId = editId || null;
+    const editingQuest = editingId ? quests.find(q=>q.id===editingId) : null;
 
-            // Resize handler
-            let resizeTimer; window.addEventListener('resize',()=>{ clearTimeout(resizeTimer); resizeTimer=setTimeout(()=>render(),100); });
+    sheetTitle.textContent = editingQuest ? 'Edit Quest' : 'New Quest';
+    saveBtn.textContent = editingQuest ? 'Save Changes' : 'Save Quest';
+    titleInput.value = editingQuest ? editingQuest.title : '';
+    descInput.value = editingQuest ? editingQuest.desc : '';
+    emojiInput.value = editingQuest ? editingQuest.icon : '⚔️';
+    selectedType = editingQuest ? editingQuest.type : 'permanent';
 
-            // Cleanup on blur
-            window.addEventListener('blur',()=>{ stopAutoScroll(); dragPreview.innerHTML=''; dragLabel.classList.remove('show'); stage.querySelectorAll('.quest.drop-target,.quest.dragging-source').forEach(n=>{n.classList.remove('drop-target');n.classList.remove('dragging-source');}); dragSourceId=null;dragAnchor=null;didDrag=false;dragMoveCount=0; });
+    emojiPicker.querySelectorAll('button').forEach(b=>b.classList.toggle('picked', b.textContent===emojiInput.value));
+    typeRow.querySelectorAll('button').forEach(b=>b.classList.toggle('picked', b.dataset.type===selectedType));
 
-            loadQuests();
-        })();
-    </script>
+    renderPrereqPills();
+    overlay.classList.add('show');
+    setTimeout(()=>titleInput.focus(), 50);
+  }
+  function closeSheet(){ overlay.classList.remove('show'); editingId = null; render(); }
+
+  newBtn.addEventListener('click', ()=>openSheet(null));
+  cancelBtn.addEventListener('click', closeSheet);
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeSheet(); });
+
+  saveBtn.addEventListener('click', ()=>{
+    const title = titleInput.value.trim();
+    if(!title){ titleInput.focus(); return; }
+    const desc = descInput.value.trim();
+    const icon = emojiInput.value.trim() || '⚔️';
+
+    if(editingId){
+      const q = quests.find(x=>x.id===editingId);
+      Object.assign(q, {title, desc, icon, type:selectedType});
+      if(selectedType === 'permanent'){
+        q.prereqIds = q.prereqIds.filter(pid=>{
+          const p = quests.find(x=>x.id===pid);
+          return !p || p.type !== 'daily';
+        });
+      }
+      celebrated = quests.length>0 && quests.every(x=>x.done);
+    } else {
+      quests.push({id:uid(), title, desc, icon, type:selectedType, prereqIds:[], done:false});
+      celebrated = false;
+    }
+    saveQuests();
+    closeSheet();
+  });
+
+  let resizeTimer;
+  window.addEventListener('resize', ()=>{
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(()=>render(), 150);
+  });
+
+  loadQuests();
+})();
+</script>
 </body>
 </html>
