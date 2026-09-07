@@ -1,4 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Questbook</title>
 
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Questbook">
+<meta name="theme-color" content="#0d0d0f">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<style>
+  :root{
+    --bg:#0d0d0f;
+    --panel:#17181b; --panel-edge:#3a3222;
+    --parchment:#ece6d6; --dim:#9c9686;
+    --locked:#3a3a3d; --locked-text:#66625a;
+    --gold:#c9a227; --gold-glow:rgba(201,162,39,0.45);
+    --done:#7c9a5e; --done-badge:#1c2417;
+    --danger:#a4453c; --warn:#c9843f;
+    --daily:#4ec3e0; --daily-glow:rgba(78,195,224,0.5);
+    --daily-panel:#121a20; --daily-edge:#1e3a48;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; height:100%; background:var(--bg); color:var(--parchment);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    overflow:hidden; position:fixed; width:100%;
+  }
+  body{
+    background-color:var(--bg);
+    background-image:
+      radial-gradient(circle at 18% 22%, rgba(255,255,255,0.035), transparent 55%),
+      radial-gradient(circle at 82% 68%, rgba(255,255,255,0.028), transparent 60%),
+      linear-gradient(150deg, rgba(255,255,255,0.02) 0%, transparent 45%),
+      linear-gradient(330deg, rgba(201,162,39,0.035) 0%, transparent 40%),
+      radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.4) 100%);
+  }
+
+header{
+  position:fixed; top:0; left:0; right:0; z-index:20;
+  padding:calc(12px + env(safe-area-inset-top)) 16px 14px;
+  background:linear-gradient(180deg, rgba(13,13,15,0.98), rgba(13,13,15,0.88));
+  border-bottom:1px solid var(--panel-edge);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+}
+header h1{
+  font-family:'Times New Roman',serif; font-weight:700; font-size:18px;
+  letter-spacing:0.14em; text-transform:uppercase; margin:0; color:var(--parchment);
+}
+header .sub{ font-size:11px; color:var(--dim); margin-top:3px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+#storage-badge{ font-size:9.5px; font-weight:700; letter-spacing:0.02em; padding:2px 7px; border-radius:20px; border:1px solid var(--panel-edge); }
+#storage-badge.bridge{ color:var(--done); border-color:var(--done); }
+#storage-badge.local{ color:var(--gold); border-color:var(--gold); }
+#storage-badge.memory{ color:var(--warn); border-color:var(--warn); }
+#ready-chip{ font-size:9.5px; font-weight:700; letter-spacing:0.02em; padding:2px 7px; border-radius:20px; border:1px solid var(--gold); color:var(--gold); display:none; }
+#ready-chip.show{ display:inline-block; }
+#progress-track{ margin-top:10px; height:4px; border-radius:4px; background:#1a1a18; overflow:hidden; }
+#progress-fill{ height:100%; width:0%; border-radius:4px; background:linear-gradient(90deg, #8a6d1f, var(--gold)); transition:width 0.45s ease; box-shadow:0 0 8px var(--gold-glow); }
+
+#memory-warning{
+  display:none; position:fixed; top:calc(74px + env(safe-area-inset-top)); left:0; right:0; z-index:19;
+  background:#2a1f13; border-bottom:1px solid var(--warn); color:#e8c495;
+  font-size:11.5px; padding:8px 16px; text-align:center;
+}
+#memory-warning.show{ display:block; }
+
+#stage-wrap{
+  position:absolute; top:calc(74px + env(safe-area-inset-top)); left:0; right:0;
+  bottom:env(safe-area-inset-bottom); overflow:hidden; cursor:grab;
+  touch-action:none; -webkit-overflow-scrolling:touch;
+}
+#stage-wrap:active{ cursor:grabbing; }
+#stage-wrap.with-warning{ top:calc(108px + env(safe-area-inset-top)); }
+#canvas{ transform-origin:0 0; position:absolute; top:0; left:0; width:3000px; height:3000px; will-change:transform; }
+#stage{ position:relative; width:100%; height:100%; }
+
+svg#lines{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:1; }
+.quest{ z-index:2; }
+
+.path-line{ fill:none; stroke:var(--locked); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:stroke 0.3s ease, stroke-width 0.2s ease, opacity 0.3s ease; opacity:0.85; }
+.path-line.active{ stroke:var(--gold); opacity:1; }
+.path-line.done{ stroke:var(--done); opacity:0.9; }
+.path-line.flow{ stroke-dasharray:7 5; animation:flow 0.55s linear infinite; }
+@keyframes flow{ to{ stroke-dashoffset:-36; } }
+.path-hit{ fill:none; stroke:transparent; stroke-width:28; pointer-events:stroke; cursor:pointer; }
+svg#lines.edit-mode .path-hit{ pointer-events:stroke; }
+svg#lines.edit-mode .path-line{ stroke-width:3; }
+svg#lines.edit-mode .path-hit + .path-line,
+svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.5; }
+
+.quest{
+  position:absolute; width:172px; min-height:118px;
+  border-radius:12px; border:1.5px solid var(--panel-edge);
+  background:var(--panel);
+  box-shadow:0 6px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+  padding:12px 12px 12px 28px;
+  cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:none;
+  transition:transform 0.14s ease, box-shadow 0.22s ease, border-color 0.2s ease, opacity 0.2s ease;
+  overflow:visible;
+}
+.quest.type-daily{
+  background:linear-gradient(165deg, #141c24 0%, var(--daily-panel) 100%);
+  border-color:var(--daily-edge);
+}
+@media (hover){
+  .quest:hover{ transform:translateY(-3px); box-shadow:0 10px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05); }
+}
+.quest::before, .quest::after{
+  content:''; position:absolute; left:12px; width:7px; height:7px; background:var(--panel-edge);
+  transform:rotate(45deg); z-index:2;
+}
+.quest::before{ top:14px; } .quest::after{ bottom:14px; }
+.quest.available::before, .quest.available::after{ background:var(--gold); }
+.quest.type-daily.available::before, .quest.type-daily.available::after{ background:var(--daily); }
+.quest.done::before, .quest.done::after{ background:var(--done); }
+
+.type-tag{
+  display:block; text-align:center; font-size:8px; font-weight:800; letter-spacing:0.09em;
+  padding:2px 6px; border-radius:4px; margin:6px auto 0; width:fit-content;
+}
+.type-tag.perm{ color:#1a1408; background:var(--gold); }
+.type-tag.daily{ color:#041218; background:var(--daily); box-shadow:0 0 6px var(--daily-glow); }
+
+.icon-badge{
+  position:absolute; left:-24px; top:50%; transform:translateY(-50%);
+  width:46px; height:46px; border-radius:50%; z-index:5;
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px; background:#201f1a; border:2.5px solid var(--locked);
+  box-shadow:0 4px 8px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.1), inset 0 -2px 3px rgba(0,0,0,0.45);
+  transition:border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+}
+.quest.type-daily .icon-badge{ background:#152028; }
+.icon-badge::before, .icon-badge::after{
+  content:''; position:absolute; inset:-7px; border-radius:50%;
+  border:2px solid var(--gold); opacity:0; pointer-events:none;
+}
+.quest.type-daily .icon-badge::before{ border-color:var(--daily); }
+.quest.available .icon-badge{ border-color:var(--gold); box-shadow:0 4px 8px rgba(0,0,0,0.55), 0 0 12px rgba(201,162,39,0.4); }
+.quest.type-daily.available .icon-badge{ border-color:var(--daily); box-shadow:0 4px 8px rgba(0,0,0,0.55), 0 0 14px rgba(78,195,224,0.5); }
+.quest.locked .icon-badge{ border-color:var(--locked); filter:grayscale(0.65) brightness(0.65); }
+.quest.done .icon-badge{ border-color:var(--done); background:var(--done-badge); }
+
+.icon-badge.just-unlocked::after{ animation:unlockRing 1s ease-out 2; }
+@keyframes unlockRing{
+  0%{ transform:scale(0.8); opacity:0.75; }
+  100%{ transform:scale(1.7); opacity:0; }
+}
+@keyframes stamp{
+  0%{ transform:translateY(-50%) scale(1); }
+  35%{ transform:translateY(-50%) scale(1.4) rotate(-8deg); }
+  60%{ transform:translateY(-50%) scale(0.92) rotate(4deg); }
+  100%{ transform:translateY(-50%) scale(1) rotate(0deg); }
+}
+.icon-badge.stamp{ animation:stamp 0.5s ease; }
+
+@keyframes cardIn{
+  from{ opacity:0; transform:translateX(-10px); }
+  to{ opacity:1; transform:translateX(0); }
+}
+.quest.card-in{ animation:cardIn 0.4s ease both; }
+
+.quest .title{
+  font-family:'Times New Roman',serif; font-weight:700; font-size:12.5px; line-height:1.25;
+  letter-spacing:0.02em; margin:0 0 4px; text-align:left;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.quest .desc{
+  font-size:10.5px; line-height:1.32; color:var(--dim); margin:0; text-align:left;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.quest .status{
+  display:flex; align-items:center; justify-content:center; gap:4px; margin-top:9px;
+  font-size:9.5px; font-weight:700; letter-spacing:0.05em; padding:3px 9px; border-radius:20px; width:fit-content;
+}
+.quest.locked .status{ color:var(--locked-text); background:rgba(102,98,90,0.14); }
+.quest.available .status{ color:var(--gold); background:rgba(201,162,39,0.15); }
+.quest.type-daily.available .status{ color:var(--daily); background:rgba(78,195,224,0.16); }
+.quest.done .status{ color:var(--done); background:rgba(124,154,94,0.16); }
+
+.node-actions{ position:absolute; top:-11px; right:-11px; display:none; gap:5px; touch-action:manipulation; z-index:10; }
+.quest.edit-mode .node-actions{ display:flex; }
+.node-actions button{
+  width:28px; height:28px; border-radius:50%; border:none; font-size:13px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; color:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,0.4); transition:transform 0.12s ease;
+}
+.node-actions button:active{ transform:scale(0.9); }
+.node-actions .edit-btn{ background:#4a5a72; }
+.node-actions .del-btn{ background:var(--danger); }
+
+.quest.locked{ border-color:#28271f; opacity:0.55; }
+.quest.type-daily.locked{ border-color:#1a2a32; }
+.quest.locked .title{ color:var(--locked-text); }
+
+.quest.available{ border-color:var(--gold); box-shadow:0 6px 14px rgba(0,0,0,0.4), 0 0 0 1.5px var(--gold-glow), 0 0 22px var(--gold-glow); }
+.quest.type-daily.available{ border-color:var(--daily); box-shadow:0 6px 14px rgba(0,0,0,0.4), 0 0 0 1.5px var(--daily-glow), 0 0 24px var(--daily-glow); }
+
+.quest.done{ border-color:var(--done); background:linear-gradient(180deg, var(--panel), #182015); }
+.quest.type-daily.done{ background:linear-gradient(180deg, #141c24, #121a16); }
+.quest.done .title{ text-decoration:line-through; text-decoration-color:rgba(236,230,214,0.4); }
+
+.quest.dragging-source{ opacity:0.55; }
+.quest.drop-target{ box-shadow:0 0 0 3px var(--gold), 0 0 20px var(--gold-glow) !important; }
+.quest.linking-source{
+  box-shadow:0 0 0 3px var(--gold), 0 0 28px var(--gold-glow) !important;
+  border-color:var(--gold) !important;
+  transform:translateX(2px);
+}
+@keyframes shakeInvalid{
+  0%,100%{ transform:translateX(0); }
+  25%{ transform:translateX(-6px); }
+  75%{ transform:translateX(6px); }
+}
+.quest.invalid-shake{ animation:shakeInvalid 0.3s ease; border-color:var(--danger) !important; }
+
+#empty-hint{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:var(--dim); font-size:13px; width:250px; z-index:2; }
+#empty-hint .glyph{ font-size:30px; display:block; margin-bottom:10px; opacity:0.7; }
+#empty-hint b{ color:var(--gold); font-family:'Times New Roman',serif; }
+
+#particles{ position:absolute; inset:0; pointer-events:none; z-index:40; overflow:hidden; }
+.particle{ position:absolute; font-size:18px; will-change:transform,opacity; }
+
+#zoom-controls{ position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); left:16px; z-index:20; display:flex; flex-direction:column; gap:6px; }
+#zoom-controls button{
+  width:38px; height:38px; border-radius:10px; border:1px solid var(--panel-edge);
+  background:var(--panel); color:var(--parchment); font-size:16px; font-weight:600; cursor:pointer;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+#zoom-controls button:active{ transform:scale(0.94); }
+
+#action-stack{ position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); right:16px; z-index:20; display:flex; flex-direction:column; gap:8px; }
+#action-stack button{
+  width:50px; height:50px; border-radius:50%; border:1px solid var(--panel-edge);
+  background:linear-gradient(180deg, #23242a, #17181b); color:var(--parchment); font-size:20px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 12px rgba(0,0,0,0.4);
+}
+#new-quest-btn{ background:linear-gradient(180deg, #ddb43e, #b8860b) !important; color:#1a1408 !important; border:none !important; }
+#edit-toggle.active{ background:linear-gradient(180deg, #c1554a, #8f342a) !important; color:#fff; border-color:var(--danger); }
+
+#celebrate{
+  position:fixed; top:0; left:0; right:0; z-index:35;
+  display:flex; justify-content:center; padding-top:90px;
+  pointer-events:none; opacity:0; transition:opacity 0.5s ease;
+}
+#celebrate.show{ opacity:1; }
+#celebrate .banner{
+  background:linear-gradient(180deg, #2a2418, #1c1b16); border:1.5px solid var(--gold);
+  color:var(--gold); font-family:'Times New Roman',serif; font-weight:700; font-size:14px;
+  letter-spacing:0.06em;
+  padding:12px 22px; border-radius:22px; box-shadow:0 0 32px var(--gold-glow);
+}
+
+#overlay, #confirm-overlay{ position:fixed; inset:0; background:rgba(4,4,5,0.78); display:none; align-items:center; justify-content:center; }
+#overlay{ z-index:30; align-items:flex-end; }
+#confirm-overlay{ z-index:50; align-items:center; padding:20px; }
+#overlay.show, #confirm-overlay.show{ display:flex; }
+#sheet{
+  width:100%; max-width:480px; background:var(--panel); border:1px solid var(--panel-edge);
+  border-radius:16px 16px 0 0; padding:18px 18px calc(22px + env(safe-area-inset-bottom));
+  max-height:84vh; overflow-y:auto;
+}
+#sheet h2{ font-family:'Times New Roman',serif; font-size:16px; margin:0 0 14px; letter-spacing:0.03em; }
+#sheet label{ display:block; font-size:11px; color:var(--dim); margin:12px 0 5px; font-weight:600; }
+#sheet input[type=text], #sheet textarea{
+  width:100%; background:#101011; border:1px solid var(--panel-edge); border-radius:8px;
+  color:var(--parchment); padding:9px 10px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:16px;
+}
+#sheet textarea{ min-height:52px; resize:vertical; }
+
+#confirm-box{ max-width:340px; width:100%; background:var(--panel); border:1px solid var(--panel-edge); border-radius:14px; padding:20px; }
+#confirm-message{ font-size:13.5px; line-height:1.5; color:var(--parchment); margin:0 0 16px; }
+#confirm-box .row{ display:flex; gap:10px; }
+#confirm-box button{ flex:1; padding:11px; border-radius:9px; border:none; font-weight:700; font-size:13.5px; cursor:pointer; }
+#confirm-cancel{ background:#232320; color:var(--dim); }
+#confirm-ok{ background:var(--danger); color:#fff; }
+
+.type-row{ display:flex; gap:8px; }
+.type-row button{
+  flex:1; padding:9px 4px; border-radius:8px; border:1.5px solid var(--panel-edge); background:#101011;
+  color:var(--dim); font-size:12px; font-weight:700; cursor:pointer;
+}
+.type-row button.picked.perm{ border-color:var(--gold); color:var(--gold); background:#231c10; }
+.type-row button.picked.daily{ border-color:var(--daily); color:var(--daily); background:#0c222b; }
+
+.emoji-row{ display:flex; align-items:center; gap:8px; }
+#emoji-input{ width:56px !important; flex:0 0 auto; text-align:center; font-size:20px !important; padding:6px !important; }
+#emoji-picker{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+#emoji-picker button{ width:34px; height:34px; font-size:17px; border-radius:8px; border:1px solid var(--panel-edge); background:#101011; cursor:pointer; }
+#emoji-picker button.picked{ border-color:var(--gold); background:#2a2313; }
+
+#prereq-pills{ display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.prereq-pill{
+  display:flex; align-items:center; gap:6px; font-size:12px; padding:5px 6px 5px 10px;
+  background:#101011; border:1px solid var(--panel-edge); border-radius:20px; color:var(--parchment);
+}
+.prereq-pill button{
+  width:18px; height:18px; border-radius:50%; border:none; background:var(--danger); color:#fff;
+  font-size:11px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;
+}
+#prereq-hint{ font-size:11.5px; color:var(--locked-text); font-style:italic; margin-top:6px; }
+
+.sheet-actions{ display:flex; gap:10px; margin-top:18px; }
+.sheet-actions button{ flex:1; padding:11px; border-radius:9px; border:none; font-weight:700; font-size:13.5px; cursor:pointer; }
+#cancel-btn{ background:#232320; color:var(--dim); }
+#save-btn{ background:linear-gradient(180deg, #ddb43e, #b8860b); color:#1a1408; }
+
+#save-note{
+  position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); left:66px; font-size:10px; color:var(--dim);
+  opacity:0; transition:opacity 0.3s ease; pointer-events:none; z-index:20;
+}
+#save-note.show{ opacity:1; }
+
+#edit-mode-hint{
+  position:fixed; top:calc(74px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+  background:#1c1613; border:1px solid var(--gold); color:var(--gold); font-size:11px;
+  padding:6px 14px; border-radius:20px; z-index:19; display:none; white-space:nowrap;
+}
+#edit-mode-hint.show{ display:block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Questbook</h1>
+  <div class="sub"><span id="progress-sub">loading…</span><span id="ready-chip"></span><span id="storage-badge"></span></div>
+  <div id="progress-track"><div id="progress-fill"></div></div>
+</header>
+<div id="memory-warning">⚠️ No persistent storage found here yet — tap the badge above to recheck.</div>
+<div id="edit-mode-hint">Tap two cards to link · Tap a line to cut · Drag works too</div>
+<div id="celebrate"><div class="banner">🏆 Quest tree complete</div></div>
+
+<div id="stage-wrap">
+  <div id="canvas">
+    <div id="stage">
+      <svg id="lines"></svg>
+      <div id="empty-hint"><span class="glyph">⚔️</span>No quests yet.<br><b>Tap +</b> to start your tree.</div>
+    </div>
+  </div>
+</div>
+
+<div id="zoom-controls">
+  <button id="zoom-in" aria-label="Zoom in">+</button>
+  <button id="zoom-reset" aria-label="Reset zoom">⤢</button>
+  <button id="zoom-out" aria-label="Zoom out">–</button>
+</div>
+<div id="action-stack">
+  <button id="new-quest-btn" aria-label="Add new quest">+</button>
+  <button id="edit-toggle" aria-label="Toggle edit mode" title="Toggle edit mode">✎</button>
+</div>
+<div id="particles"></div>
+<svg id="drag-preview" style="position:fixed;inset:0;pointer-events:none;z-index:45;width:100vw;height:100vh;"></svg>
+<div id="save-note">saved ✓</div>
+
+<div id="overlay">
+  <div id="sheet">
+    <h2 id="sheet-title">New Quest</h2>
+
+    <label>Type</label>
+    <div class="type-row">
+      <button type="button" class="perm" data-type="permanent">Permanent</button>
+      <button type="button" class="daily" data-type="daily">Daily</button>
+    </div>
+
+    <label>Icon</label>
+    <div class="emoji-row">
+      <input type="text" id="emoji-input" maxlength="4" value="⚔️">
+      <div style="font-size:11px;color:var(--dim);">Type any emoji, or pick below</div>
+    </div>
+    <div id="emoji-picker"></div>
+
+    <label>Title</label>
+    <input type="text" id="q-title" maxlength="70" placeholder="e.g. Slay the goblin king">
+    <label>Description</label>
+    <textarea id="q-desc" placeholder="What needs to happen here?"></textarea>
+
+    <label>Depends on</label>
+    <div id="prereq-pills"></div>
+    <div id="prereq-hint">Drag from another quest onto this one on the canvas to connect it.</div>
+
+    <div class="sheet-actions">
+      <button id="cancel-btn">Cancel</button>
+      <button id="save-btn">Save Quest</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirm-overlay">
+  <div id="confirm-box">
+    <p id="confirm-message"></p>
+    <div class="row">
+      <button id="confirm-cancel">Cancel</button>
+      <button id="confirm-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const EMOJI_SET = ['⚔️','🛡️','🏹','🗡️','🔥','❄️','💀','👑','🏰','🗺️','💰','📜','🔑','🐉','⭐','✅','📦','🧪','🔮','🛠️','🎯','📚','🧭','⛏️','🌿','🏺','🦌'];
+  const STORAGE_KEY = 'questbook-quests-v1';
+
+  let quests = [];
+  let dailyKey = null;
+  let selectedType = 'permanent';
+  let editMode = false;
+  let editingId = null;
+  let storageMode = 'memory';
+  let zoom = 1;
+  let panX = 0, panY = 0;
+  let celebrated = false;
+  let firstRender = true;
+  let linkingFrom = null;
+
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('canvas');
+  const svg = document.getElementById('lines');
+  const emptyHint = document.getElementById('empty-hint');
+  const progressSub = document.getElementById('progress-sub');
+  const progressFill = document.getElementById('progress-fill');
+  const readyChip = document.getElementById('ready-chip');
+  const storageBadge = document.getElementById('storage-badge');
+  const memoryWarning = document.getElementById('memory-warning');
+  const editModeHint = document.getElementById('edit-mode-hint');
+  const stageWrap = document.getElementById('stage-wrap');
+  const overlay = document.getElementById('overlay');
+  const editToggle = document.getElementById('edit-toggle');
+  const particlesLayer = document.getElementById('particles');
+  const saveNote = document.getElementById('save-note');
+  const celebrateEl = document.getElementById('celebrate');
+  const dragPreview = document.getElementById('drag-preview');
+
+  function uid(){ return 'q' + Math.random().toString(36).slice(2,9); }
+  function vibrate(ms){ try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} }
+
+  const confirmOverlay = document.getElementById('confirm-overlay');
+  const confirmMessage = document.getElementById('confirm-message');
+  const confirmCancelBtn = document.getElementById('confirm-cancel');
+  const confirmOkBtn = document.getElementById('confirm-ok');
+  let confirmResolver = null;
+  function showConfirm(message){
+    confirmMessage.textContent = message;
     confirmOverlay.classList.add('show');
     return new Promise(resolve=>{ confirmResolver = resolve; });
   }
