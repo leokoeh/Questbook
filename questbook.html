@@ -99,7 +99,7 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
   border-radius:12px; border:1.5px solid var(--panel-edge);
   background:var(--panel);
   box-shadow:0 6px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
-  padding:12px 12px 12px 28px;
+  padding:30px 12px 12px;
   cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:none;
   transition:transform 0.14s ease, box-shadow 0.22s ease, border-color 0.2s ease, opacity 0.2s ease;
   overflow:visible;
@@ -112,10 +112,10 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
   .quest:hover{ transform:translateY(-3px); box-shadow:0 10px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05); }
 }
 .quest::before, .quest::after{
-  content:''; position:absolute; left:12px; width:7px; height:7px; background:var(--panel-edge);
+  content:''; position:absolute; top:12px; width:7px; height:7px; background:var(--panel-edge);
   transform:rotate(45deg); z-index:2;
 }
-.quest::before{ top:14px; } .quest::after{ bottom:14px; }
+.quest::before{ left:10px; } .quest::after{ right:10px; }
 .quest.available::before, .quest.available::after{ background:var(--gold); }
 .quest.type-daily.available::before, .quest.type-daily.available::after{ background:var(--daily); }
 .quest.done::before, .quest.done::after{ background:var(--done); }
@@ -128,7 +128,7 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
 .type-tag.daily{ color:#041218; background:var(--daily); box-shadow:0 0 6px var(--daily-glow); }
 
 .icon-badge{
-  position:absolute; left:-24px; top:50%; transform:translateY(-50%);
+  position:absolute; top:-26px; left:50%; transform:translateX(-50%);
   width:46px; height:46px; border-radius:50%; z-index:5;
   display:flex; align-items:center; justify-content:center;
   font-size:22px; background:#201f1a; border:2.5px solid var(--locked);
@@ -143,6 +143,11 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
 .quest.type-daily .icon-badge::before{ border-color:var(--daily); }
 .quest.available .icon-badge{ border-color:var(--gold); box-shadow:0 4px 8px rgba(0,0,0,0.55), 0 0 12px rgba(201,162,39,0.4); }
 .quest.type-daily.available .icon-badge{ border-color:var(--daily); box-shadow:0 4px 8px rgba(0,0,0,0.55), 0 0 14px rgba(78,195,224,0.5); }
+.quest.available .icon-badge::before{ animation:breatheRing 2.5s ease-in-out infinite; }
+@keyframes breatheRing{
+  0%,100%{ transform:scale(0.82); opacity:0.55; }
+  50%{ transform:scale(1.25); opacity:0; }
+}
 .quest.locked .icon-badge{ border-color:var(--locked); filter:grayscale(0.65) brightness(0.65); }
 .quest.done .icon-badge{ border-color:var(--done); background:var(--done-badge); }
 
@@ -152,31 +157,31 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
   100%{ transform:scale(1.7); opacity:0; }
 }
 @keyframes stamp{
-  0%{ transform:translateY(-50%) scale(1); }
-  35%{ transform:translateY(-50%) scale(1.4) rotate(-8deg); }
-  60%{ transform:translateY(-50%) scale(0.92) rotate(4deg); }
-  100%{ transform:translateY(-50%) scale(1) rotate(0deg); }
+  0%{ transform:translateX(-50%) scale(1); }
+  35%{ transform:translateX(-50%) scale(1.4) rotate(-8deg); }
+  60%{ transform:translateX(-50%) scale(0.92) rotate(4deg); }
+  100%{ transform:translateX(-50%) scale(1) rotate(0deg); }
 }
 .icon-badge.stamp{ animation:stamp 0.5s ease; }
 
 @keyframes cardIn{
-  from{ opacity:0; transform:translateX(-10px); }
-  to{ opacity:1; transform:translateX(0); }
+  from{ opacity:0; transform:translateY(10px); }
+  to{ opacity:1; transform:translateY(0); }
 }
 .quest.card-in{ animation:cardIn 0.4s ease both; }
 
 .quest .title{
   font-family:'Times New Roman',serif; font-weight:700; font-size:12.5px; line-height:1.25;
-  letter-spacing:0.02em; margin:0 0 4px; text-align:left;
+  letter-spacing:0.02em; margin:0 0 4px; text-align:center;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
 .quest .desc{
-  font-size:10.5px; line-height:1.32; color:var(--dim); margin:0; text-align:left;
+  font-size:10.5px; line-height:1.32; color:var(--dim); margin:0; text-align:center;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
 .quest .status{
   display:flex; align-items:center; justify-content:center; gap:4px; margin-top:9px;
-  font-size:9.5px; font-weight:700; letter-spacing:0.05em; padding:3px 9px; border-radius:20px; width:fit-content;
+  font-size:9.5px; font-weight:700; letter-spacing:0.05em; padding:3px 9px; border-radius:20px;
 }
 .quest.locked .status{ color:var(--locked-text); background:rgba(102,98,90,0.14); }
 .quest.available .status{ color:var(--gold); background:rgba(201,162,39,0.15); }
@@ -210,7 +215,7 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
 .quest.linking-source{
   box-shadow:0 0 0 3px var(--gold), 0 0 28px var(--gold-glow) !important;
   border-color:var(--gold) !important;
-  transform:translateX(2px);
+  transform:translateY(-2px);
 }
 @keyframes shakeInvalid{
   0%,100%{ transform:translateX(0); }
@@ -642,7 +647,7 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
     return false;
   }
 
-  const NODE_W = 172, NODE_H = 118, COL_GAP = 80, ROW_GAP = 36, PAD = 60;
+  const NODE_W = 172, NODE_H = 118, COL_GAP = 36, ROW_GAP = 110, PAD = 60;
 
   function layout(){
     const cache = new Map();
@@ -651,55 +656,57 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
     const tierKeys = Object.keys(tiers).map(Number).sort((a,b)=>a-b);
 
     const positions = {};
-    const minGap = NODE_H + ROW_GAP;
-    const viewH = Math.max(window.innerHeight, 800);
+    const minGap = NODE_W + COL_GAP;
+    const viewW = Math.max(window.innerWidth, 1200);
 
-    function xForTier(t){ return PAD + t * (NODE_W + COL_GAP); }
+    function yForTier(t){ return PAD + t * (NODE_H + ROW_GAP); }
 
     tierKeys.forEach(t=>{
-      const col = tiers[t];
+      const row = tiers[t];
       if(t === 0){
-        const colH = col.length * minGap - ROW_GAP;
-        const startY = (viewH - colH) / 2;
-        col.forEach((q, i)=>{
-          positions[q.id] = { x: xForTier(0), y: startY + i * minGap };
+        const rowW = row.length * minGap - COL_GAP;
+        const startX = (viewW - rowW) / 2;
+        row.forEach((q, i)=>{
+          positions[q.id] = { x: startX + i * minGap, y: yForTier(0) };
         });
       } else {
-        col.forEach(q=>{
+        // Position each child directly under its parent center (or averaged if multiple parents)
+        row.forEach(q=>{
           const parents = q.prereqIds.map(id => positions[id]).filter(Boolean);
-          let cy = viewH / 2;
+          let cx = viewW / 2;
           if(parents.length){
-            cy = parents.reduce((sum, p) => sum + p.y + NODE_H/2, 0) / parents.length;
+            cx = parents.reduce((sum, p) => sum + p.x + NODE_W/2, 0) / parents.length;
           }
-          let y = cy - NODE_H/2;
-          positions[q.id] = { x: xForTier(t), y };
+          let x = cx - NODE_W/2;
+          positions[q.id] = { x, y: yForTier(t) };
         });
 
-        col.sort((a,b) => positions[a.id].y - positions[b.id].y);
-        for(let i = 1; i < col.length; i++){
-          const prev = positions[col[i-1].id];
-          const cur = positions[col[i].id];
-          if(cur.y < prev.y + minGap){
-            cur.y = prev.y + minGap;
+        // Resolve overlaps cleanly without breaking parent-child vertical alignment preference
+        row.sort((a,b) => positions[a.id].x - positions[b.id].x);
+        for(let i = 1; i < row.length; i++){
+          const prev = positions[row[i-1].id];
+          const cur = positions[row[i].id];
+          if(cur.x < prev.x + minGap){
+            cur.x = prev.x + minGap;
           }
         }
       }
     });
 
-    let minY = Infinity, maxY = -Infinity;
+    let minX = Infinity, maxX = -Infinity;
     Object.values(positions).forEach(p=>{
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y + NODE_H);
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x + NODE_W);
     });
     
-    const treeH = maxY - minY;
-    const offset = (viewH - treeH)/2 - minY;
+    const treeW = maxX - minX;
+    const offset = (viewW - treeW)/2 - minX;
     if(isFinite(offset)){
-      Object.values(positions).forEach(p => { p.y += offset; });
+      Object.values(positions).forEach(p => { p.x += offset; });
     }
 
-    const stageH = Math.max(viewH, maxY + PAD + (offset > 0 ? offset : 0));
-    const stageW = PAD * 2 + (tierKeys.length ? (Math.max(...tierKeys) + 1) : 1) * (NODE_W + COL_GAP);
+    const stageW = Math.max(viewW, maxX + PAD + (offset > 0 ? offset : 0));
+    const stageH = PAD * 2 + (tierKeys.length ? (Math.max(...tierKeys) + 1) : 1) * (NODE_H + ROW_GAP);
     return { positions, stageW, stageH };
   }
 
@@ -739,14 +746,14 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
     stage.style.width = stageW + 'px';
     stage.style.height = stageH + 'px';
 
-    const rightOf = {};
+    const bottomOf = {};
     quests.forEach(q=>{ 
       const pos = positions[q.id];
       const elTemp = document.createElement('div');
       elTemp.className = 'quest';
       elTemp.style.visibility = 'hidden';
       stage.appendChild(elTemp);
-      rightOf[q.id] = pos.x + elTemp.offsetWidth;
+      bottomOf[q.id] = pos.y + elTemp.offsetHeight;
       elTemp.remove();
     });
 
@@ -757,12 +764,12 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
         const p = quests.find(x=>x.id===pid);
         if(!p) return;
         const from = positions[pid];
-        const x1 = rightOf[pid] || (from.x + NODE_W), y1 = from.y + NODE_H/2;
-        const x2 = to.x + 2, y2 = to.y + NODE_H/2;
+        const x1 = from.x + NODE_W/2, y1 = bottomOf[pid] || (from.y + NODE_H);
+        const x2 = to.x + NODE_W/2, y2 = to.y + 2;
         
-        const midX = x1 + (x2 - x1) / 2;
-        const dy = (y2 - y1) * 0.25;
-        const d = `M ${x1} ${y1} C ${midX} ${y1 + dy}, ${midX} ${y2 - dy}, ${x2} ${y2}`;
+        const midY = y1 + (y2 - y1) / 2;
+        const dx = (x2 - x1) * 0.25;
+        const d = `M ${x1} ${y1} C ${x1 + dx} ${midY}, ${x2 - dx} ${midY}, ${x2} ${y2}`;
 
         let cls = q.done ? 'done' : (p.done ? 'active' : '');
         const markerId = cls === 'done' ? 'arrow-done' : (cls === 'active' ? 'arrow-active' : 'arrow-locked');
@@ -856,9 +863,9 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
 
   function updateDragPreview(anchor, x2, y2){
     const {x:x1, y:y1} = anchor;
-    const midX = x1 + (x2 - x1) / 2;
-    const dy = (y2 - y1) * 0.25;
-    const d = `M ${x1} ${y1} C ${midX} ${y1 + dy}, ${midX} ${y2 - dy}, ${x2} ${y2}`;
+    const midY = y1 + (y2 - y1) / 2;
+    const dx = (x2 - x1) * 0.25;
+    const d = `M ${x1} ${y1} C ${x1 + dx} ${midY}, ${x2 - dx} ${midY}, ${x2} ${y2}`;
     dragPreview.innerHTML = `<path class="path-line active" marker-end="url(#arrow-active)" d="${d}"/>`;
     const hoverEl = document.elementFromPoint(x2, y2);
     const questUnder = hoverEl && hoverEl.closest('.quest');
@@ -881,7 +888,7 @@ svg#lines.edit-mode .path-line{ stroke:var(--danger) !important; stroke-width:3.
         dragging = true;
         questEl.classList.add('dragging-source');
         const r = questEl.getBoundingClientRect();
-        anchor = { x: r.right, y: r.top + r.height/2 };
+        anchor = { x: r.left + r.width/2, y: r.top + r.height };
       }
       if(dragging){ updateDragPreview(anchor, ev.clientX, ev.clientY); }
     };
