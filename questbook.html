@@ -55,8 +55,8 @@
   #storage-badge.memory{ color:var(--warn); border-color:var(--warn); }
   #ready-chip{ font-size:9.5px; font-weight:700; letter-spacing:0.02em; padding:2px 7px; border-radius:20px; border:1px solid var(--gold); color:var(--gold); display:none; }
   #ready-chip.show{ display:inline; }
-  #progress-track{ margin-top:10px; height:5px; border-radius:4px; background:#232320; overflow:hidden; }
-  #progress-fill{ height:100%; width:0%; border-radius:4px; background:linear-gradient(90deg, #8a6d1f, var(--gold)); transition:width .5s ease; }
+  #progress-track{ margin-top:10px; height:4px; border-radius:4px; background:#1a1a18; overflow:hidden; }
+  #progress-fill{ height:100%; width:0%; border-radius:4px; background:linear-gradient(90deg, #8a6d1f, var(--gold)); transition:width .45s ease; box-shadow:0 0 8px var(--gold-glow); }
 
   #memory-warning{
     display:none; position:fixed; top:calc(74px + env(safe-area-inset-top)); left:0; right:0; z-index:19;
@@ -71,9 +71,9 @@
   #stage{ position:relative; }
 
   svg#lines{ position:absolute; top:0; left:0; pointer-events:none; }
-  .path-line{ fill:none; stroke:var(--locked); stroke-width:2.5; transition:stroke .3s ease, stroke-width .2s ease; }
-  .path-line.active{ stroke:var(--gold); }
-  .path-line.done{ stroke:var(--done); }
+  .path-line{ fill:none; stroke:var(--locked); stroke-width:2; transition:stroke .3s ease, stroke-width .2s ease, opacity .3s ease; opacity:0.85; }
+  .path-line.active{ stroke:var(--gold); opacity:1; }
+  .path-line.done{ stroke:var(--done); opacity:0.9; }
   .path-line.flow{ stroke-dasharray:7 5; animation:flow .55s linear 3; }
   @keyframes flow{ to{ stroke-dashoffset:-36; } }
   .path-hit{ fill:none; stroke:transparent; stroke-width:28; pointer-events:none; cursor:pointer; }
@@ -109,10 +109,6 @@
   .quest.done::before, .quest.done::after{ background:var(--done); }
   .quest:active{ transform:scale(0.96); cursor:grabbing; }
 
-  .type-strip{ position:absolute; top:0; left:0; right:0; height:5px; }
-  .type-strip.perm{ background:linear-gradient(90deg, #8a6d1f, var(--gold)); }
-  .type-strip.daily{ background:linear-gradient(90deg, #1a6a8a, var(--daily)); box-shadow:0 0 8px var(--daily-glow); }
-
   .type-tag{
     display:block; text-align:center; font-size:8px; font-weight:800; letter-spacing:0.09em;
     padding:2px 6px; border-radius:4px; margin:6px auto 0; width:fit-content;
@@ -121,8 +117,8 @@
   .type-tag.daily{ color:#041218; background:var(--daily); box-shadow:0 0 6px var(--daily-glow); }
 
   .icon-badge{
-    position:absolute; top:-24px; left:50%; transform:translateX(-50%);
-    width:46px; height:46px; border-radius:50%; z-index:4;
+    position:absolute; top:-26px; left:50%; transform:translateX(-50%);
+    width:46px; height:46px; border-radius:50%; z-index:5;
     display:flex; align-items:center; justify-content:center;
     font-size:22px; background:#201f1a; border:2.5px solid var(--locked);
     box-shadow:0 4px 8px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.1), inset 0 -2px 3px rgba(0,0,0,0.45);
@@ -192,7 +188,7 @@
   .node-actions .edit-btn{ background:#4a5a72; }
   .node-actions .del-btn{ background:var(--danger); }
 
-  .quest.locked{ border-color:#28271f; opacity:0.48; }
+  .quest.locked{ border-color:#28271f; opacity:0.55; }
   .quest.type-daily.locked{ border-color:#1a2a32; }
   .quest.locked .title{ color:var(--locked-text); }
 
@@ -205,6 +201,15 @@
 
   .quest.dragging-source{ opacity:0.55; }
   .quest.drop-target{ box-shadow:0 0 0 3px var(--gold), 0 0 20px var(--gold-glow) !important; }
+  .quest.linking-source{
+    box-shadow:0 0 0 3px var(--gold), 0 0 28px var(--gold-glow) !important;
+    border-color:var(--gold) !important;
+    transform:translateY(-2px);
+  }
+  .quest.linking-source .status{
+    color:var(--gold) !important;
+    background:rgba(201,162,39,0.2) !important;
+  }
   @keyframes shakeInvalid{
     0%,100%{ transform:translateX(0); }
     25%{ transform:translateX(-6px); }
@@ -223,14 +228,16 @@
   #zoom-controls button{
     width:38px; height:38px; border-radius:10px; border:1px solid var(--panel-edge);
     background:var(--panel); color:var(--parchment); font-size:16px; font-weight:600; cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.3);
   }
   #zoom-controls button:active{ transform:scale(0.94); }
 
   #action-stack{ position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); right:16px; z-index:20; display:flex; flex-direction:row; gap:8px; }
   #action-stack button{
-    width:48px; height:48px; border-radius:50%; border:1px solid var(--panel-edge);
-    background:linear-gradient(180deg, #23242a, #17181b); color:var(--parchment); font-size:19px; cursor:pointer;
+    width:50px; height:50px; border-radius:50%; border:1px solid var(--panel-edge);
+    background:linear-gradient(180deg, #23242a, #17181b); color:var(--parchment); font-size:20px; cursor:pointer;
     display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 12px rgba(0,0,0,0.4);
   }
   #new-quest-btn{ background:linear-gradient(180deg, #ddb43e, #b8860b) !important; color:#1a1408 !important; border:none !important; }
   #edit-toggle.active{ background:linear-gradient(180deg, #c1554a, #8f342a) !important; color:#fff; border-color:var(--danger); }
@@ -242,10 +249,10 @@
   }
   #celebrate.show{ opacity:1; }
   #celebrate .banner{
-    background:linear-gradient(180deg, #242017, #1c1b16); border:1.5px solid var(--gold);
-    color:var(--gold); font-family:Georgia,'Times New Roman',serif; font-weight:700; font-size:13px;
-    letter-spacing:0.04em;
-    padding:10px 18px; border-radius:20px; box-shadow:0 0 24px var(--gold-glow);
+    background:linear-gradient(180deg, #2a2418, #1c1b16); border:1.5px solid var(--gold);
+    color:var(--gold); font-family:Georgia,'Times New Roman',serif; font-weight:700; font-size:14px;
+    letter-spacing:0.06em;
+    padding:12px 22px; border-radius:22px; box-shadow:0 0 32px var(--gold-glow);
   }
 
   #overlay, #confirm-overlay{ position:fixed; inset:0; background:rgba(4,4,5,0.78); display:none; align-items:flex-end; justify-content:center; }
@@ -320,14 +327,14 @@
   <div id="progress-track"><div id="progress-fill"></div></div>
 </header>
 <div id="memory-warning">⚠️ No persistent storage found here yet — tap the badge above to recheck.</div>
-<div id="edit-mode-hint">Drag card → link · Tap line → cut</div>
+<div id="edit-mode-hint">Tap two cards to link · Tap a line to cut · Drag works too</div>
 <div id="celebrate"><div class="banner">🏆 Quest tree complete</div></div>
 
 <div id="stage-wrap">
   <div id="canvas">
     <div id="stage">
       <svg id="lines"></svg>
-      <div id="empty-hint"><span class="glyph">🏛️</span>No quests yet.<br><b>Tap the + below</b><br>to start your tree.</div>
+      <div id="empty-hint"><span class="glyph">⚔️</span>No quests yet.<br><b>Tap +</b> to start your tree.</div>
     </div>
   </div>
 </div>
@@ -402,6 +409,7 @@
   let zoom = 1;
   let celebrated = false;
   let firstRender = true;
+  let linkingFrom = null; // id of quest selected for tap-to-link
 
   const stage = document.getElementById('stage');
   const canvas = document.getElementById('canvas');
@@ -624,33 +632,102 @@
     quests.forEach(q=>{ const t = tierOf(q, cache); (tiers[t] = tiers[t] || []).push(q); });
     const tierKeys = Object.keys(tiers).map(Number).sort((a,b)=>a-b);
 
-    const orderIndex = {};
-    tierKeys.forEach(t=>{
-      const row = tiers[t];
-      if(t === tierKeys[0]){
-        row.forEach((q,i)=>{ orderIndex[q.id] = i; });
-        return;
+    const positions = {};
+    const minGap = NODE_W + COL_GAP;
+    const viewW = window.innerWidth;
+
+    // primary-parent tree for tidy placement
+    const treeChildren = {};
+    quests.forEach(q=>{ treeChildren[q.id] = []; });
+    quests.forEach(q=>{
+      if(q.prereqIds.length){
+        const pp = q.prereqIds[0];
+        if(treeChildren[pp]) treeChildren[pp].push(q.id);
       }
-      const withScore = row.map((q,i)=>{
-        const parentIdx = q.prereqIds.map(id=>orderIndex[id]).filter(v=>v!==undefined);
-        const score = parentIdx.length ? parentIdx.reduce((a,b)=>a+b,0)/parentIdx.length : i;
-        return {q, score, i};
-      });
-      withScore.sort((a,b)=> a.score - b.score || a.i - b.i);
-      tiers[t] = withScore.map(x=>x.q);
-      tiers[t].forEach((q,i)=>{ orderIndex[q.id] = i; });
     });
 
-    let maxCols = 1;
-    tierKeys.forEach(t=>{ maxCols = Math.max(maxCols, tiers[t].length); });
-    const stageW = Math.max(window.innerWidth, PAD*2 + maxCols*(NODE_W+COL_GAP));
-    const positions = {};
-    tierKeys.forEach(t=>{
-      const row = tiers[t];
-      const rowW = row.length*(NODE_W+COL_GAP) - COL_GAP;
-      const startX = (stageW - rowW)/2;
-      row.forEach((q,i)=>{ positions[q.id] = { x: startX + i*(NODE_W+COL_GAP), y: PAD + t*(NODE_H+ROW_GAP) }; });
+    // subtree widths
+    const subtreeW = {};
+    function calcWidth(id){
+      if(subtreeW[id] !== undefined) return subtreeW[id];
+      const kids = treeChildren[id] || [];
+      if(!kids.length){ subtreeW[id] = NODE_W; return NODE_W; }
+      let total = 0;
+      kids.forEach(k=>{ total += calcWidth(k); });
+      total += Math.max(0, kids.length - 1) * COL_GAP;
+      subtreeW[id] = Math.max(NODE_W, total);
+      return subtreeW[id];
+    }
+    quests.forEach(q=> calcWidth(q.id));
+
+    const placed = new Set();
+    function placeTree(id, centerX, y){
+      if(placed.has(id)) return;
+      placed.add(id);
+      positions[id] = { x: centerX - NODE_W/2, y };
+      const kids = treeChildren[id] || [];
+      if(!kids.length) return;
+      let tw = 0;
+      kids.forEach(k=>{ tw += subtreeW[k]; });
+      tw += Math.max(0, kids.length - 1) * COL_GAP;
+      let cursor = centerX - tw / 2;
+      kids.forEach(k=>{
+        const w = subtreeW[k];
+        placeTree(k, cursor + w/2, y + NODE_H + ROW_GAP);
+        cursor += w + COL_GAP;
+      });
+    }
+
+    // roots as a centered block, spaced by subtree width
+    if(tierKeys.length){
+      const roots = tiers[tierKeys[0]];
+      let totalW = 0;
+      roots.forEach(r=>{ totalW += subtreeW[r.id]; });
+      totalW += Math.max(0, roots.length - 1) * COL_GAP;
+      let cursor = (viewW - totalW) / 2;
+      roots.forEach(r=>{
+        const w = subtreeW[r.id];
+        placeTree(r.id, cursor + w/2, PAD);
+        cursor += w + COL_GAP;
+      });
+    }
+
+    // multi-parent nodes not yet placed → average of parents
+    quests.forEach(q=>{
+      if(positions[q.id]) return;
+      const parents = q.prereqIds.map(id=>positions[id]).filter(Boolean);
+      let cx = viewW / 2;
+      if(parents.length){
+        cx = parents.reduce((s,p)=>s + p.x + NODE_W/2, 0) / parents.length;
+      }
+      const t = tierOf(q, new Map());
+      positions[q.id] = { x: cx - NODE_W/2, y: PAD + t * (NODE_H + ROW_GAP) };
     });
+
+    // light overlap fix per tier
+    tierKeys.forEach(t=>{
+      const row = (tiers[t] || []).slice().sort((a,b)=>(positions[a.id]?.x||0)-(positions[b.id]?.x||0));
+      for(let i = 1; i < row.length; i++){
+        const prev = positions[row[i-1].id];
+        const cur = positions[row[i].id];
+        if(prev && cur && cur.x < prev.x + minGap) cur.x = prev.x + minGap;
+      }
+    });
+
+    // bounds
+    let minX = Infinity, maxX = -Infinity;
+    Object.values(positions).forEach(p=>{
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x + NODE_W);
+    });
+    if(!isFinite(minX)){ minX = 0; maxX = viewW; }
+    if(minX < PAD){
+      const shift = PAD - minX;
+      Object.values(positions).forEach(p=>{ p.x += shift; });
+      maxX += shift;
+    }
+
+    const stageW = Math.max(viewW, maxX + PAD);
     const stageH = PAD*2 + (tierKeys.length ? (Math.max(...tierKeys)+1) : 1) * (NODE_H+ROW_GAP);
     return {positions, stageW, stageH};
   }
@@ -699,7 +776,10 @@
       const statusClass = q.done ? 'done' : (locked ? 'locked' : 'available');
       const typeClass = q.type === 'daily' ? 'type-daily' : 'type-perm';
       const el = document.createElement('div');
-      el.className = `quest ${statusClass} ${typeClass}` + (editMode ? ' edit-mode' : '') + (firstRender ? ' card-in' : '');
+      el.className = `quest ${statusClass} ${typeClass}`
+        + (editMode ? ' edit-mode' : '')
+        + (firstRender ? ' card-in' : '')
+        + (linkingFrom === q.id ? ' linking-source' : '');
       if(firstRender){ el.style.animationDelay = Math.min(idx * 30, 400) + 'ms'; }
       el.dataset.id = q.id;
       el.style.left = pos.x + 'px';
@@ -707,7 +787,6 @@
       const statusLabel = q.done ? '✓ COMPLETE' : (locked ? '🔒 LOCKED' : '✦ READY');
       const badgeExtra = justUnlockedIds.includes(q.id) ? ' just-unlocked' : (stampId===q.id ? ' stamp' : '');
       el.innerHTML = `
-        <div class="type-strip ${q.type==='daily'?'daily':'perm'}"></div>
         <div class="node-actions">
           <button type="button" class="edit-btn" aria-label="Edit quest">✎</button>
           <button type="button" class="del-btn" aria-label="Delete quest">×</button>
@@ -846,12 +925,37 @@
           toggleLink(id, targetEl.dataset.id);
         }
       } else {
-        const q = quests.find(x=>x.id===id);
-        if(q && !editMode && !isLocked(q)) completeToggle(q, questEl);
+        // pure tap (no drag)
+        if(editMode){
+          if(linkingFrom === id){
+            // tapped same card → cancel
+            linkingFrom = null;
+            render();
+          } else if(linkingFrom){
+            // second tap → toggle link
+            toggleLink(linkingFrom, id);
+            linkingFrom = null;
+          } else {
+            // first tap → select as source
+            linkingFrom = id;
+            render();
+          }
+        } else {
+          const q = quests.find(x=>x.id===id);
+          if(q && !isLocked(q)) completeToggle(q, questEl);
+        }
       }
     };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp, {once:true});
+  });
+
+  // tap empty space in edit mode cancels link selection
+  stageWrap.addEventListener('pointerdown', (e)=>{
+    if(!editMode || !linkingFrom) return;
+    if(e.target.closest('.quest') || e.target.closest('button')) return;
+    linkingFrom = null;
+    render();
   });
 
   // edit/delete buttons now have direct listeners attached in render() for reliability
@@ -941,6 +1045,7 @@
   editToggle.addEventListener('click', ()=>{
     editMode = !editMode;
     editToggle.classList.toggle('active', editMode);
+    if(!editMode) linkingFrom = null;
     render();
   });
 
