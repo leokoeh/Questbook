@@ -636,99 +636,83 @@
     const minGap = NODE_W + COL_GAP;
     const viewW = window.innerWidth;
 
-    function yForTier(t){ return PAD + t * (NODE_H + ROW_GAP); }
-
-    // children map
-    const kidsOf = {};
-    quests.forEach(q=>{ kidsOf[q.id] = []; });
+    // primary-parent tree for tidy placement
+    const treeChildren = {};
+    quests.forEach(q=>{ treeChildren[q.id] = []; });
     quests.forEach(q=>{
-      q.prereqIds.forEach(pid=>{
-        if(kidsOf[pid]) kidsOf[pid].push(q.id);
-      });
+      if(q.prereqIds.length){
+        const pp = q.prereqIds[0];
+        if(treeChildren[pp]) treeChildren[pp].push(q.id);
+      }
     });
 
-    // 1. Roots equal + centered
+    // subtree widths
+    const subtreeW = {};
+    function calcWidth(id){
+      if(subtreeW[id] !== undefined) return subtreeW[id];
+      const kids = treeChildren[id] || [];
+      if(!kids.length){ subtreeW[id] = NODE_W; return NODE_W; }
+      let total = 0;
+      kids.forEach(k=>{ total += calcWidth(k); });
+      total += Math.max(0, kids.length - 1) * COL_GAP;
+      subtreeW[id] = Math.max(NODE_W, total);
+      return subtreeW[id];
+    }
+    quests.forEach(q=> calcWidth(q.id));
+
+    const placed = new Set();
+    function placeTree(id, centerX, y){
+      if(placed.has(id)) return;
+      placed.add(id);
+      positions[id] = { x: centerX - NODE_W/2, y };
+      const kids = treeChildren[id] || [];
+      if(!kids.length) return;
+      let tw = 0;
+      kids.forEach(k=>{ tw += subtreeW[k]; });
+      tw += Math.max(0, kids.length - 1) * COL_GAP;
+      let cursor = centerX - tw / 2;
+      kids.forEach(k=>{
+        const w = subtreeW[k];
+        placeTree(k, cursor + w/2, y + NODE_H + ROW_GAP);
+        cursor += w + COL_GAP;
+      });
+    }
+
+    // roots as a centered block, spaced by subtree width
     if(tierKeys.length){
       const roots = tiers[tierKeys[0]];
-      const rowW = roots.length * minGap - COL_GAP;
-      const startX = (viewW - rowW) / 2;
-      roots.forEach((q,i)=>{
-        positions[q.id] = { x: startX + i * minGap, y: yForTier(0) };
+      let totalW = 0;
+      roots.forEach(r=>{ totalW += subtreeW[r.id]; });
+      totalW += Math.max(0, roots.length - 1) * COL_GAP;
+      let cursor = (viewW - totalW) / 2;
+      roots.forEach(r=>{
+        const w = subtreeW[r.id];
+        placeTree(r.id, cursor + w/2, PAD);
+        cursor += w + COL_GAP;
       });
     }
 
-    // 2. Place each lower tier: group siblings by parent-average, center groups, resolve overlaps
-    for(let ti = 1; ti < tierKeys.length; ti++){
-      const t = tierKeys[ti];
-      const row = tiers[t];
-      const y = yForTier(t);
-
-      const ideals = new Map();
-      row.forEach(q=>{
-        const parents = q.prereqIds.map(id => positions[id]).filter(Boolean);
-        let cx = viewW / 2;
-        if(parents.length){
-          cx = parents.reduce((s,p)=>s + p.x + NODE_W/2, 0) / parents.length;
-        }
-        ideals.set(q.id, cx);
-      });
-
-      const groups = [];
-      const used = new Set();
-      const sorted = row.slice().sort((a,b)=> ideals.get(a.id) - ideals.get(b.id));
-      sorted.forEach(q=>{
-        if(used.has(q.id)) return;
-        const members = [q];
-        used.add(q.id);
-        const c = ideals.get(q.id);
-        sorted.forEach(o=>{
-          if(used.has(o.id)) return;
-          if(Math.abs(ideals.get(o.id) - c) < 4){
-            members.push(o);
-            used.add(o.id);
-          }
-        });
-        const width = members.length * minGap - COL_GAP;
-        const center = members.reduce((s,m)=>s + ideals.get(m.id), 0) / members.length;
-        groups.push({ members, center, width });
-      });
-
-      groups.forEach(g=>{
-        const startX = g.center - g.width / 2;
-        g.members.forEach((q,i)=>{
-          positions[q.id] = { x: startX + i * minGap, y };
-        });
-      });
-
-      groups.sort((a,b)=> a.center - b.center);
-      for(let i = 1; i < groups.length; i++){
-        const prevRight = Math.max(...groups[i-1].members.map(q=>positions[q.id].x)) + NODE_W;
-        const curLeft = Math.min(...groups[i].members.map(q=>positions[q.id].x));
-        if(curLeft < prevRight + COL_GAP){
-          const push = prevRight + COL_GAP - curLeft;
-          groups[i].members.forEach(q=>{ positions[q.id].x += push; });
-        }
+    // multi-parent nodes not yet placed → average of parents
+    quests.forEach(q=>{
+      if(positions[q.id]) return;
+      const parents = q.prereqIds.map(id=>positions[id]).filter(Boolean);
+      let cx = viewW / 2;
+      if(parents.length){
+        cx = parents.reduce((s,p)=>s + p.x + NODE_W/2, 0) / parents.length;
       }
-    }
+      const t = tierOf(q, new Map());
+      positions[q.id] = { x: cx - NODE_W/2, y: PAD + t * (NODE_H + ROW_GAP) };
+    });
 
-    // 3. KEY: walk bottom-up — each parent slides to the center of its children
-    for(let ti = tierKeys.length - 2; ti >= 0; ti--){
-      const t = tierKeys[ti];
-      (tiers[t] || []).forEach(q=>{
-        const kids = (kidsOf[q.id] || []).filter(id => positions[id]);
-        if(!kids.length) return;
-        const cx = kids.reduce((s,id)=>s + positions[id].x + NODE_W/2, 0) / kids.length;
-        positions[q.id].x = cx - NODE_W/2;
-      });
-
-      // keep parents on this tier from overlapping
+    // light overlap fix per tier
+    tierKeys.forEach(t=>{
       const row = (tiers[t] || []).slice().sort((a,b)=>(positions[a.id]?.x||0)-(positions[b.id]?.x||0));
       for(let i = 1; i < row.length; i++){
         const prev = positions[row[i-1].id];
         const cur = positions[row[i].id];
         if(prev && cur && cur.x < prev.x + minGap) cur.x = prev.x + minGap;
       }
-    }
+    });
 
     // bounds
     let minX = Infinity, maxX = -Infinity;
@@ -813,6 +797,13 @@
         <div class="status">${statusLabel}</div>
         <div class="type-tag ${q.type==='daily'?'daily':'perm'}">${q.type==='daily'?'DAILY':'PERMANENT'}</div>
       `;
+      const editBtn = el.querySelector('.edit-btn');
+      const delBtn = el.querySelector('.del-btn');
+      editBtn.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); openSheet(q.id); });
+      delBtn.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); deleteQuest(q.id); });
+      // also stop pointerdown so drag logic never starts on the buttons
+      editBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); });
+      delBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); });
       frag.appendChild(el);
       elById[q.id] = el;
     });
@@ -967,18 +958,7 @@
     render();
   });
 
-  // single delegated listener for edit/delete (no re-attach every render)
-  stage.addEventListener('click', (e)=>{
-    const btn = e.target.closest('.edit-btn, .del-btn');
-    if(!btn) return;
-    e.stopPropagation();
-    e.preventDefault();
-    const questEl = btn.closest('.quest');
-    if(!questEl) return;
-    const id = questEl.dataset.id;
-    if(btn.classList.contains('del-btn')) deleteQuest(id);
-    else openSheet(id);
-  });
+  // edit/delete buttons now have direct listeners attached in render() for reliability
 
   function cascadeUncheck(id){
     quests.forEach(q=>{
