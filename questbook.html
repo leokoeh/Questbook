@@ -1,4 +1,4 @@
-[source: 1]<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -163,10 +163,11 @@
             left: 0;
             right: 0;
             bottom: env(safe-area-inset-bottom);
-            overflow: hidden;
+            overflow: scroll;
             cursor: grab;
-            touch-action: none;
+            touch-action: pan-x pan-y;
             -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
         }
         #stage-wrap:active {
             cursor: grabbing;
@@ -1516,7 +1517,6 @@
             const MIN_VIEWPORT_H = 600;
             const MIN_VIEWPORT_W = 800;
 
-            // Updated Layout Engine with Barycenter / Median Sorting Heuristic
             function layout() {
                 if (!quests.length) return { positions: {}, stageW: 0, stageH: 0 };
 
@@ -1559,7 +1559,6 @@
                 const viewW = Math.max(window.innerWidth, MIN_VIEWPORT_W);
                 const positions = {};
 
-                // Iterative Barycenter placement passes to minimize line crossings
                 for (let pass = 0; pass < 3; pass++) {
                     for (let i = 0; i < tierKeys.length; i++) {
                         const t = tierKeys[i];
@@ -1865,6 +1864,10 @@
                 if (e.target.closest('.node-actions') || e.target.closest('button')) return;
                 const questEl = e.target.closest('.quest');
                 if (!questEl) return;
+                
+                // Connections and drag-to-link are restricted to edit mode
+                if (!editMode) return;
+
                 const id = questEl.dataset.id;
                 const startX = e.clientX,
                     startY = e.clientY;
@@ -1897,20 +1900,15 @@
                             toggleLink(id, targetEl.dataset.id);
                         }
                     } else {
-                        if (editMode) {
-                            if (linkingFrom === id) {
-                                linkingFrom = null;
-                                render();
-                            } else if (linkingFrom) {
-                                toggleLink(linkingFrom, id);
-                                linkingFrom = null;
-                            } else {
-                                linkingFrom = id;
-                                render();
-                            }
+                        if (linkingFrom === id) {
+                            linkingFrom = null;
+                            render();
+                        } else if (linkingFrom) {
+                            toggleLink(linkingFrom, id);
+                            linkingFrom = null;
                         } else {
-                            const q = quests.find(x => x.id === id);
-                            if (q && !isLocked(q)) completeToggle(q, questEl);
+                            linkingFrom = id;
+                            render();
                         }
                     }
                 };
@@ -1945,14 +1943,25 @@
 
             stage.addEventListener('click', (e) => {
                 const btn = e.target.closest('.edit-btn, .del-btn');
-                if (!btn) return;
-                e.stopPropagation();
-                e.preventDefault();
-                const questEl = btn.closest('.quest');
-                if (!questEl) return;
-                const id = questEl.dataset.id;
-                if (btn.classList.contains('del-btn')) deleteQuest(id);
-                else openSheet(id);
+                if (btn) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const questEl = btn.closest('.quest');
+                    if (!questEl) return;
+                    const id = questEl.dataset.id;
+                    if (btn.classList.contains('del-btn')) deleteQuest(id);
+                    else openSheet(id);
+                    return;
+                }
+
+                // Normal click toggling when NOT in edit mode
+                if (!editMode) {
+                    const questEl = e.target.closest('.quest');
+                    if (!questEl) return;
+                    const id = questEl.dataset.id;
+                    const q = quests.find(x => x.id === id);
+                    if (q && !isLocked(q)) completeToggle(q, questEl);
+                }
             });
 
             function cascadeUncheck(id) {
